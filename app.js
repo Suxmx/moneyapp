@@ -5,19 +5,19 @@ const presets = [20, 50, 100, 200];
 const categories = [
   {
     id: "daily",
-    label: "日常类",
+    label: "烟火",
     empty: "还没有日常用途，可以在设置里添加。",
     color: "#48c7b5"
   },
   {
     id: "fixed",
-    label: "固定开销类",
+    label: "恒常",
     empty: "还没有固定开销。",
     color: "#67a8ff"
   },
   {
     id: "saving",
-    label: "储蓄类",
+    label: "归藏",
     empty: "还没有储蓄用途。",
     color: "#8bdc9a"
   }
@@ -40,11 +40,11 @@ let activeFundId = null;
 let toastTimer = null;
 
 const fundList = document.querySelector("#fundList");
-const totalRemaining = document.querySelector("#totalRemaining");
+const dailyAverageSpent = document.querySelector("#dailyAverageSpent");
+const dailyAverageRemaining = document.querySelector("#dailyAverageRemaining");
 const summaryFixed = document.querySelector("#summaryFixed");
 const summarySaving = document.querySelector("#summarySaving");
 const summaryDaily = document.querySelector("#summaryDaily");
-const monthTitle = document.querySelector("#monthTitle");
 const expenseDialog = document.querySelector("#expenseDialog");
 const expenseForm = document.querySelector("#expenseForm");
 const expenseTitle = document.querySelector("#expenseTitle");
@@ -147,18 +147,18 @@ function saveState() {
 }
 
 function render() {
-  const month = new Date().toLocaleDateString("zh-CN", { month: "long" });
-  monthTitle.textContent = `${month}口袋`;
-
   const viewFunds = state.funds.map(toViewFund);
   const dailyFunds = viewFunds.filter((fund) => fund.category === "daily");
   const fixedAllocated = sum(viewFunds.filter((fund) => fund.category === "fixed"), "allocated");
   const savingAllocated = sum(viewFunds.filter((fund) => fund.category === "saving"), "allocated");
   const dailyAllocated = sum(dailyFunds, "allocated");
   const dailyRemaining = sum(dailyFunds, "remaining");
+  const dailySpent = sum(dailyFunds, "spent");
+  const average = getMonthlyAverages(dailySpent, dailyRemaining);
   const summarySegments = getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated);
 
-  totalRemaining.textContent = formatMoney(dailyRemaining);
+  dailyAverageSpent.textContent = formatMoney(average.spent);
+  dailyAverageRemaining.textContent = formatMoney(average.remaining);
   summaryFixed.style.width = `${summarySegments.fixed}%`;
   summarySaving.style.width = `${summarySegments.saving}%`;
   summaryDaily.style.width = `${summarySegments.daily}%`;
@@ -178,7 +178,6 @@ function renderFundGroup(category, funds) {
     <section class="fund-group category-${category.id}" aria-labelledby="group-${category.id}">
       <div class="group-heading">
         <h2 id="group-${category.id}">${category.label}</h2>
-        <span>${funds.length}</span>
       </div>
       <div class="fund-group-list">
         ${funds.length ? funds.map(renderFundCard).join("") : `<div class="empty-state compact">${category.empty}</div>`}
@@ -191,22 +190,20 @@ function renderFundCard(fund) {
   const remainingPercent = fund.allocated > 0 ? Math.max(0, Math.min(100, (fund.remaining / fund.allocated) * 100)) : 0;
   const category = getCategory(fund.category);
   const isDaily = fund.category === "daily";
-  const isFixed = fund.category === "fixed";
-  const cardLabel = isDaily ? "点击记账" : "留存";
+  const hasProgress = fund.category === "daily";
   const percentBadge = isDaily ? `<span class="fund-percent">${formatPercent(fund.incomePercent)}</span>` : "";
-  const displayAmount = isFixed ? fund.allocated : fund.remaining;
+  const displayAmount = fund.category === "fixed" ? fund.allocated : fund.remaining;
   const progressText = `${formatPlainMoney(fund.remaining)}/${formatPlainMoney(fund.allocated)}`;
-  const progressMarkup = isFixed ? "" : `
+  const progressMarkup = hasProgress ? `
       <div class="fund-card-bottom">
         <div class="fund-progress-info">
-          <span>${cardLabel}</span>
           <span>${progressText}</span>
         </div>
         <div class="fund-track" aria-hidden="true">
           <span style="width: ${remainingPercent}%; background: ${category.color}"></span>
         </div>
       </div>
-  `;
+  ` : "";
 
   return `
     <button class="fund-card fund-card-${fund.category}" type="button" data-id="${fund.id}" style="--fund-color: ${category.color}">
@@ -450,6 +447,18 @@ function updateSettingSummary() {
   const percentTotal = income > 0 ? (totalAmount / income) * 100 : 0;
   percentSummary.textContent = `已分配 ${formatPercent(percentTotal)}`;
   amountSummary.textContent = `预算 ${formatMoney(totalAmount)}`;
+}
+
+function getMonthlyAverages(spent, remaining) {
+  const now = new Date();
+  const elapsedDays = Math.max(1, now.getDate());
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const remainingDays = Math.max(1, daysInMonth - now.getDate() + 1);
+
+  return {
+    spent: roundMoney(spent / elapsedDays),
+    remaining: roundMoney(remaining / remainingDays)
+  };
 }
 
 function getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated) {

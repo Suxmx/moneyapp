@@ -67,6 +67,7 @@ button {
 }
 
 .top-bar {
+  justify-content: flex-end;
   margin-bottom: 16px;
 }
 
@@ -146,11 +147,29 @@ h2 {
   box-shadow: var(--shadow);
 }
 
-.summary-amount {
-  margin: 0;
-  font-size: clamp(2.35rem, 13vw, 3.4rem);
+.summary-metrics {
+  display: grid;
+  gap: 12px;
+}
+
+.summary-metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.summary-metric span {
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 780;
+}
+
+.summary-metric strong {
+  color: var(--ink);
+  font-size: clamp(1.55rem, 8vw, 2.25rem);
   font-weight: 850;
-  line-height: 0.95;
+  line-height: 1;
   letter-spacing: 0;
 }
 
@@ -212,17 +231,6 @@ h2 {
   padding: 0 2px;
 }
 
-.group-heading span {
-  min-width: 30px;
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-weight: 820;
-  text-align: center;
-}
-
 .fund-card {
   display: flex;
   flex-direction: column;
@@ -249,6 +257,7 @@ h2 {
 
 .fund-card-saving {
   background: linear-gradient(135deg, #ffffff, #f1fbf2);
+  min-height: 104px;
 }
 
 .fund-name {
@@ -291,6 +300,7 @@ h2 {
 }
 
 .fund-progress-info {
+  justify-content: flex-end;
   align-items: flex-end;
   color: var(--muted);
   font-size: 0.72rem;

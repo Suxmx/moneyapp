@@ -16,9 +16,6 @@
   <body>
     <main class="app-shell" aria-label="月度口袋记账">
       <header class="top-bar">
-        <div>
-          <h1 id="monthTitle">月度口袋</h1>
-        </div>
         <button class="icon-button" id="openSettings" type="button" aria-label="设置预算">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
@@ -28,7 +25,16 @@
       </header>
 
       <section class="summary-panel" aria-label="总览">
-        <p class="summary-amount" id="totalRemaining">¥0</p>
+        <div class="summary-metrics">
+          <div class="summary-metric">
+            <span>日均已用</span>
+            <strong id="dailyAverageSpent">¥0</strong>
+          </div>
+          <div class="summary-metric">
+            <span>余日可用</span>
+            <strong id="dailyAverageRemaining">¥0</strong>
+          </div>
+        </div>
         <div class="summary-track" aria-hidden="true">
           <span class="summary-segment summary-fixed" id="summaryFixed"></span>
           <span class="summary-segment summary-saving" id="summarySaving"></span>
