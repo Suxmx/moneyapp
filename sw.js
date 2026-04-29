@@ -1,4 +1,4 @@
-const CACHE_NAME = "moneyapp-shell-v5";
+const CACHE_NAME = "moneyapp-shell-v6";
 const APP_SHELL = [
   "./",
   "./index.html",

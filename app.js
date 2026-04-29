@@ -403,11 +403,11 @@ function renderSettingRow(fund) {
       </label>
       <label class="budget-field budget-percent-field">
         <span>比例 %</span>
-        <input class="fund-percent-input" inputmode="decimal" min="0" step="0.1" type="number" value="${formatInputNumber(percentValue)}" />
+        <input class="fund-percent-input" inputmode="decimal" min="0" step="any" type="number" value="${formatInputNumber(percentValue)}" />
       </label>
       <label class="budget-field budget-amount-field">
         <span>金额</span>
-        <input class="fund-amount-input" inputmode="decimal" min="0" step="1" type="number" value="${formatInputNumber(amountValue)}" />
+        <input class="fund-amount-input" inputmode="decimal" min="0" step="any" type="number" value="${formatInputNumber(amountValue)}" />
       </label>
       <button class="remove-button" type="button" aria-label="删除用途">
         <svg viewBox="0 0 24 24" aria-hidden="true">
