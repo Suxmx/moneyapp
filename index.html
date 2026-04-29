@@ -91,6 +91,31 @@
       </form>
     </dialog>
 
+    <dialog class="sheet" id="spentDialog" aria-labelledby="spentTitle">
+      <form method="dialog" id="spentForm">
+        <div class="sheet-header">
+          <div>
+            <p class="eyebrow">调整已用</p>
+            <h2 id="spentTitle">已用金额</h2>
+          </div>
+          <button class="icon-button subtle" value="cancel" type="submit" formnovalidate aria-label="关闭">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <p class="dialog-hint" id="spentHint">输入该用途当前已经使用的金额。</p>
+        <label class="input-group">
+          <span>已用金额</span>
+          <input id="spentAmount" inputmode="decimal" min="0" step="0.01" type="number" placeholder="0.00" required />
+        </label>
+        <menu class="dialog-actions">
+          <button class="secondary-button" value="cancel" type="submit" formnovalidate>取消</button>
+          <button class="primary-button" id="saveSpent" value="default" type="submit">保存</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog class="sheet settings-sheet" id="settingsDialog" aria-labelledby="settingsTitle">
       <form method="dialog" id="settingsForm">
         <div class="sheet-header">
@@ -119,6 +144,7 @@
           </svg>
           添加用途
         </button>
+        <button class="danger-button" id="resetState" type="button">恢复初始状态</button>
         <menu class="dialog-actions">
           <button class="secondary-button" value="cancel" type="submit" formnovalidate>取消</button>
           <button class="primary-button" id="saveSettings" value="default" type="submit">保存</button>

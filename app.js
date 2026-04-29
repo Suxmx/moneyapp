@@ -6,19 +6,16 @@ const categories = [
   {
     id: "daily",
     label: "烟火",
-    empty: "还没有日常用途，可以在设置里添加。",
     color: "#48c7b5"
   },
   {
     id: "fixed",
     label: "恒常",
-    empty: "还没有固定开销。",
     color: "#67a8ff"
   },
   {
     id: "saving",
     label: "归藏",
-    empty: "还没有储蓄用途。",
     color: "#8bdc9a"
   }
 ];
@@ -26,17 +23,16 @@ const categories = [
 const colors = ["#48c7b5", "#67a8ff", "#8bdc9a", "#78c6ff", "#60d394", "#91b7ff"];
 
 const defaultState = {
-  income: 10000,
-  funds: [
-    { id: "living", name: "生活", category: "daily", mode: "percent", percent: 50, amount: 0, color: colors[0], spent: 800 },
-    { id: "rent", name: "房租", category: "fixed", mode: "amount", percent: 0, amount: 3000, color: colors[1], spent: 0 },
-    { id: "saving", name: "储蓄", category: "saving", mode: "percent", percent: 20, amount: 0, color: colors[2], spent: 0 }
-  ],
+  income: 0,
+  funds: [],
   history: []
 };
 
 let state = loadState();
 let activeFundId = null;
+let activeSpentFundId = null;
+let longPressTimer = null;
+let longPressTriggered = false;
 let toastTimer = null;
 
 const fundList = document.querySelector("#fundList");
@@ -51,6 +47,11 @@ const expenseTitle = document.querySelector("#expenseTitle");
 const expenseHint = document.querySelector("#expenseHint");
 const expenseAmount = document.querySelector("#expenseAmount");
 const presetGrid = document.querySelector("#presetGrid");
+const spentDialog = document.querySelector("#spentDialog");
+const spentForm = document.querySelector("#spentForm");
+const spentTitle = document.querySelector("#spentTitle");
+const spentHint = document.querySelector("#spentHint");
+const spentAmount = document.querySelector("#spentAmount");
 const settingsDialog = document.querySelector("#settingsDialog");
 const settingsForm = document.querySelector("#settingsForm");
 const incomeInput = document.querySelector("#incomeInput");
@@ -61,13 +62,21 @@ const toast = document.querySelector("#toast");
 
 document.querySelector("#openSettings").addEventListener("click", openSettings);
 document.querySelector("#addFund").addEventListener("click", addSettingRow);
+document.querySelector("#resetState").addEventListener("click", resetToInitialState);
 expenseForm.addEventListener("submit", saveExpense);
+spentForm.addEventListener("submit", saveSpentAmount);
 settingsForm.addEventListener("submit", saveSettings);
 incomeInput.addEventListener("input", syncBudgetRowsForIncome);
 budgetEditor.addEventListener("input", handleBudgetEditorInput);
 budgetEditor.addEventListener("change", handleBudgetEditorInput);
 budgetEditor.addEventListener("click", handleBudgetEditorClick);
 fundList.addEventListener("click", handleFundClick);
+fundList.addEventListener("contextmenu", handleFundContextMenu);
+fundList.addEventListener("pointerdown", startLongPress);
+fundList.addEventListener("pointermove", clearLongPress);
+fundList.addEventListener("pointerup", clearLongPress);
+fundList.addEventListener("pointerleave", clearLongPress);
+fundList.addEventListener("pointercancel", clearLongPress);
 
 presetGrid.innerHTML = presets
   .map((amount) => `<button type="button" data-amount="${amount}">¥${amount}</button>`)
@@ -100,7 +109,7 @@ function loadState() {
 }
 
 function normalizeState(input) {
-  const income = toMoney(input.income) || defaultState.income;
+  const income = Math.max(0, toMoney(input.income));
   const funds = Array.isArray(input.funds) && input.funds.length
     ? input.funds.map((fund, index) => {
         const category = normalizeCategory(fund.category || inferLegacyCategory(fund));
@@ -164,12 +173,15 @@ function render() {
   summaryDaily.style.width = `${summarySegments.daily}%`;
 
   if (!viewFunds.length) {
-    fundList.innerHTML = `<div class="empty-state">还没有资金用途，点右上角设置添加。</div>`;
+    fundList.innerHTML = "";
     return;
   }
 
   fundList.innerHTML = categories
-    .map((category) => renderFundGroup(category, viewFunds.filter((fund) => fund.category === category.id)))
+    .map((category) => {
+      const funds = viewFunds.filter((fund) => fund.category === category.id);
+      return funds.length ? renderFundGroup(category, funds) : "";
+    })
     .join("");
 }
 
@@ -180,7 +192,7 @@ function renderFundGroup(category, funds) {
         <h2 id="group-${category.id}">${category.label}</h2>
       </div>
       <div class="fund-group-list">
-        ${funds.length ? funds.map(renderFundCard).join("") : `<div class="empty-state compact">${category.empty}</div>`}
+        ${funds.map(renderFundCard).join("")}
       </div>
     </section>
   `;
@@ -218,12 +230,48 @@ function handleFundClick(event) {
   const card = event.target.closest(".fund-card");
   if (!card) return;
 
+  if (longPressTriggered) {
+    longPressTriggered = false;
+    return;
+  }
+
   const fund = state.funds.find((item) => item.id === card.dataset.id);
   if (!fund) return;
 
   if (fund.category !== "daily") return;
 
   openExpense(fund.id);
+}
+
+function handleFundContextMenu(event) {
+  const fund = getDailyFundFromEvent(event);
+  if (!fund) return;
+  event.preventDefault();
+}
+
+function startLongPress(event) {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  const fund = getDailyFundFromEvent(event);
+  if (!fund) return;
+
+  clearLongPress();
+  longPressTriggered = false;
+  longPressTimer = window.setTimeout(() => {
+    longPressTriggered = true;
+    openSpentAdjustment(fund.id);
+  }, 620);
+}
+
+function clearLongPress() {
+  clearTimeout(longPressTimer);
+  longPressTimer = null;
+}
+
+function getDailyFundFromEvent(event) {
+  const card = event.target.closest(".fund-card");
+  if (!card) return null;
+  const fund = state.funds.find((item) => item.id === card.dataset.id);
+  return fund?.category === "daily" ? fund : null;
 }
 
 function openExpense(fundId) {
@@ -237,6 +285,19 @@ function openExpense(fundId) {
   expenseAmount.value = "";
   expenseDialog.showModal();
   requestAnimationFrame(() => expenseAmount.focus());
+}
+
+function openSpentAdjustment(fundId) {
+  const fund = state.funds.find((item) => item.id === fundId);
+  if (!fund || fund.category !== "daily") return;
+
+  const viewFund = toViewFund(fund);
+  activeSpentFundId = fundId;
+  spentTitle.textContent = fund.name;
+  spentHint.textContent = `当前已用 ${formatMoney(viewFund.spent)}，总额 ${formatMoney(viewFund.allocated)}。`;
+  spentAmount.value = formatInputNumber(viewFund.spent);
+  spentDialog.showModal();
+  requestAnimationFrame(() => spentAmount.select());
 }
 
 function saveExpense(event) {
@@ -275,11 +336,51 @@ function saveExpense(event) {
   showToast(`${fund.name} 已记 ${formatMoney(amount)}`);
 }
 
+function saveSpentAmount(event) {
+  event.preventDefault();
+  const submitter = event.submitter;
+  if (submitter?.value === "cancel") {
+    spentDialog.close();
+    return;
+  }
+
+  const amount = toMoney(spentAmount.value);
+  const fund = state.funds.find((item) => item.id === activeSpentFundId);
+  if (!fund || fund.category !== "daily" || amount < 0) {
+    showToast("请输入有效金额");
+    return;
+  }
+
+  const viewFund = toViewFund(fund);
+  if (amount > viewFund.allocated) {
+    showToast("已用金额不能超过总额");
+    return;
+  }
+
+  fund.spent = roundMoney(amount);
+  saveState();
+  spentDialog.close();
+  render();
+  showToast(`${fund.name} 已用更新为 ${formatMoney(amount)}`);
+}
+
 function openSettings() {
   incomeInput.value = state.income;
   budgetEditor.innerHTML = state.funds.map(renderSettingRow).join("");
   syncBudgetRowsForIncome();
   settingsDialog.showModal();
+}
+
+function resetToInitialState() {
+  const confirmed = window.confirm("恢复初始状态会清空所有本地预算和记账数据。确定继续吗？");
+  if (!confirmed) return;
+
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+  state = structuredClone(defaultState);
+  settingsDialog.close();
+  render();
+  showToast("已恢复初始状态");
 }
 
 function renderSettingRow(fund) {
