@@ -189,9 +189,7 @@ function renderFundGroup(category, funds) {
 function renderFundCard(fund) {
   const remainingPercent = fund.allocated > 0 ? Math.max(0, Math.min(100, (fund.remaining / fund.allocated) * 100)) : 0;
   const category = getCategory(fund.category);
-  const isDaily = fund.category === "daily";
   const hasProgress = fund.category === "daily";
-  const percentBadge = isDaily ? `<span class="fund-percent">${formatPercent(fund.incomePercent)}</span>` : "";
   const displayAmount = fund.category === "fixed" ? fund.allocated : fund.remaining;
   const progressText = `${formatPlainMoney(fund.remaining)}/${formatPlainMoney(fund.allocated)}`;
   const progressMarkup = hasProgress ? `
@@ -209,7 +207,6 @@ function renderFundCard(fund) {
     <button class="fund-card fund-card-${fund.category}" type="button" data-id="${fund.id}" style="--fund-color: ${category.color}">
       <div class="fund-head">
         <p class="fund-name"><span class="fund-dot"></span>${escapeHtml(fund.name)}</p>
-        ${percentBadge}
       </div>
       <p class="fund-money">${formatMoney(displayAmount)}</p>
       ${progressMarkup}
