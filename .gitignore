@@ -1,0 +1,25 @@
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.cache/
+.parcel-cache/
+
+# Logs and local environment
+*.log
+.env
+.env.*
+!.env.example
+
+# Test and coverage artifacts
+coverage/
+playwright-report/
+test-results/

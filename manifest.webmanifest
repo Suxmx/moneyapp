@@ -1,0 +1,18 @@
+{
+  "name": "月度口袋",
+  "short_name": "口袋",
+  "description": "按用途分配当月收入，并快速记录支出的自用记账 PWA。",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f8f5ef",
+  "theme_color": "#f8f5ef",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

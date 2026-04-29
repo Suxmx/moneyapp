@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f8f5ef" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="月度口袋" />
+    <title>月度口袋</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/app-icon.svg" />
+    <link rel="icon" href="icons/app-icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell" aria-label="月度口袋记账">
+      <header class="top-bar">
+        <div>
+          <p class="eyebrow">本月余额</p>
+          <h1 id="monthTitle">月度口袋</h1>
+        </div>
+        <button class="icon-button" id="openSettings" type="button" aria-label="设置预算">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.05.05a2.05 2.05 0 0 1-2.9 2.9l-.05-.05A1.7 1.7 0 0 0 15 19.43a1.7 1.7 0 0 0-1 .57 1.7 1.7 0 0 0-.34 1.08V21a2.05 2.05 0 1 1-4.1 0v-.08A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.05.05a2.05 2.05 0 1 1-2.9-2.9l.05-.05A1.7 1.7 0 0 0 4.57 15a1.7 1.7 0 0 0-1.56-1H3a2.05 2.05 0 1 1 0-4.1h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.05-.05a2.05 2.05 0 1 1 2.9-2.9l.05.05A1.7 1.7 0 0 0 9 4.57a1.7 1.7 0 0 0 1-.57 1.7 1.7 0 0 0 .34-1.08V3a2.05 2.05 0 1 1 4.1 0v.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.05-.05a2.05 2.05 0 1 1 2.9 2.9l-.05.05A1.7 1.7 0 0 0 19.43 9c.1.37.3.7.57 1 .31.31.72.48 1.16.48H21a2.05 2.05 0 1 1 0 4.1h-.08A1.7 1.7 0 0 0 19.4 15Z" />
+          </svg>
+        </button>
+      </header>
+
+      <section class="summary-panel" aria-label="总览">
+        <div>
+          <p class="summary-label">还能花</p>
+          <p class="summary-amount" id="totalRemaining">¥0</p>
+        </div>
+        <div class="summary-stats">
+          <span id="spentRatio">已用 0%</span>
+          <span id="allocationRatio">分配 0%</span>
+        </div>
+        <div class="summary-track" aria-hidden="true">
+          <span id="summaryFill"></span>
+        </div>
+      </section>
+
+      <section class="fund-list" id="fundList" aria-label="资金用途列表"></section>
+
+      <nav class="bottom-tabs" aria-label="页面导航">
+        <button class="tab-button active" type="button" aria-label="预算余额">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z" />
+            <path d="M15 12.25h5V16h-5.25a1.88 1.88 0 0 1 0-3.75H15Z" />
+          </svg>
+        </button>
+        <button class="tab-button" type="button" aria-label="记录">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 4h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2-2-1.34V6a2 2 0 0 1 2-2Z" />
+            <path d="M9 9h6M9 13h6" />
+          </svg>
+        </button>
+        <button class="tab-button" type="button" aria-label="统计">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 20V10M12 20V4M19 20v-7" />
+          </svg>
+        </button>
+      </nav>
+    </main>
+
+    <dialog class="sheet" id="expenseDialog" aria-labelledby="expenseTitle">
+      <form method="dialog" id="expenseForm">
+        <div class="sheet-header">
+          <div>
+            <p class="eyebrow">快速记一笔</p>
+            <h2 id="expenseTitle">记录支出</h2>
+          </div>
+          <button class="icon-button subtle" value="cancel" type="submit" aria-label="关闭">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <p class="dialog-hint" id="expenseHint">输入金额后会从该模块余额扣除。</p>
+        <label class="input-group">
+          <span>金额</span>
+          <input id="expenseAmount" inputmode="decimal" min="0" step="0.01" type="number" placeholder="0.00" required />
+        </label>
+        <div class="preset-grid" id="presetGrid" aria-label="常用金额"></div>
+        <menu class="dialog-actions">
+          <button class="secondary-button" value="cancel" type="submit">取消</button>
+          <button class="primary-button" id="saveExpense" value="default" type="submit">记账</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog class="sheet settings-sheet" id="settingsDialog" aria-labelledby="settingsTitle">
+      <form method="dialog" id="settingsForm">
+        <div class="sheet-header">
+          <div>
+            <p class="eyebrow">预算设置</p>
+            <h2 id="settingsTitle">分配本月收入</h2>
+          </div>
+          <button class="icon-button subtle" value="cancel" type="submit" aria-label="关闭">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <label class="input-group">
+          <span>当月总收入</span>
+          <input id="incomeInput" inputmode="decimal" min="0" step="1" type="number" required />
+        </label>
+        <div class="setting-summary">
+          <span id="percentSummary">已分配 0%</span>
+          <span id="amountSummary">预算 ¥0</span>
+        </div>
+        <div class="budget-editor" id="budgetEditor"></div>
+        <button class="add-button" id="addFund" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          添加用途
+        </button>
+        <menu class="dialog-actions">
+          <button class="secondary-button" value="cancel" type="submit">取消</button>
+          <button class="primary-button" id="saveSettings" value="default" type="submit">保存</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

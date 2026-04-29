@@ -1,0 +1,4 @@
+2026-04-29: 在 Codex Windows App 内执行 `rg --files` 时，内置 `rg.exe` 从 `C:\Program Files\WindowsApps\...` 启动被拒绝；遇到相同环境可先用 PowerShell `Get-ChildItem` 和 `Select-String` 规避。
+2026-04-29: `E:\moneyapp` 当前没有 `.git` 目录，`git status` 会报 `not a git repository`；需要推送时先初始化仓库或切到已 clone 的项目目录。
+2026-04-29: Python 3.13 `http.server` 在本机把 `.js` 返回为 `text/plain`，导致浏览器拒绝加载 `type="module"`；本项目改用 `npm run dev` 的零依赖 Node 静态服务保证 MIME 正确。
+2026-04-29: Edge headless `--screenshot --window-size=390,...` 在本机截图会裁掉右侧，疑似使用了更宽的内部布局视口；移动端视觉验证可用 440 宽截图粗查，再用真实浏览器或设备确认 390 宽细节。
