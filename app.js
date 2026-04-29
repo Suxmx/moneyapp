@@ -6,21 +6,18 @@ const categories = [
   {
     id: "daily",
     label: "日常类",
-    hint: "点击条目快速记账",
     empty: "还没有日常用途，可以在设置里添加。",
     color: "#48c7b5"
   },
   {
     id: "fixed",
     label: "固定开销类",
-    hint: "设置后直接扣除",
     empty: "还没有固定开销。",
     color: "#67a8ff"
   },
   {
     id: "saving",
     label: "储蓄类",
-    hint: "留存不记账",
     empty: "还没有储蓄用途。",
     color: "#8bdc9a"
   }
@@ -44,9 +41,9 @@ let toastTimer = null;
 
 const fundList = document.querySelector("#fundList");
 const totalRemaining = document.querySelector("#totalRemaining");
-const spentRatio = document.querySelector("#spentRatio");
-const allocationRatio = document.querySelector("#allocationRatio");
-const summaryFill = document.querySelector("#summaryFill");
+const summaryFixed = document.querySelector("#summaryFixed");
+const summarySaving = document.querySelector("#summarySaving");
+const summaryDaily = document.querySelector("#summaryDaily");
 const monthTitle = document.querySelector("#monthTitle");
 const expenseDialog = document.querySelector("#expenseDialog");
 const expenseForm = document.querySelector("#expenseForm");
@@ -155,16 +152,16 @@ function render() {
 
   const viewFunds = state.funds.map(toViewFund);
   const dailyFunds = viewFunds.filter((fund) => fund.category === "daily");
+  const fixedAllocated = sum(viewFunds.filter((fund) => fund.category === "fixed"), "allocated");
+  const savingAllocated = sum(viewFunds.filter((fund) => fund.category === "saving"), "allocated");
   const dailyAllocated = sum(dailyFunds, "allocated");
   const dailyRemaining = sum(dailyFunds, "remaining");
-  const dailySpent = sum(dailyFunds, "spent");
-  const totalAllocated = sum(viewFunds, "allocated");
-  const usedPercent = dailyAllocated > 0 ? Math.min(100, (dailySpent / dailyAllocated) * 100) : 0;
+  const summarySegments = getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated);
 
   totalRemaining.textContent = formatMoney(dailyRemaining);
-  spentRatio.textContent = `日常已用 ${formatPercent(usedPercent)}`;
-  allocationRatio.textContent = `已分配 ${formatMoney(totalAllocated)}`;
-  summaryFill.style.width = `${usedPercent}%`;
+  summaryFixed.style.width = `${summarySegments.fixed}%`;
+  summarySaving.style.width = `${summarySegments.saving}%`;
+  summaryDaily.style.width = `${summarySegments.daily}%`;
 
   if (!viewFunds.length) {
     fundList.innerHTML = `<div class="empty-state">还没有资金用途，点右上角设置添加。</div>`;
@@ -180,10 +177,7 @@ function renderFundGroup(category, funds) {
   return `
     <section class="fund-group category-${category.id}" aria-labelledby="group-${category.id}">
       <div class="group-heading">
-        <div>
-          <h2 id="group-${category.id}">${category.label}</h2>
-          <p>${category.hint}</p>
-        </div>
+        <h2 id="group-${category.id}">${category.label}</h2>
         <span>${funds.length}</span>
       </div>
       <div class="fund-group-list">
@@ -197,17 +191,12 @@ function renderFundCard(fund) {
   const remainingPercent = fund.allocated > 0 ? Math.max(0, Math.min(100, (fund.remaining / fund.allocated) * 100)) : 0;
   const category = getCategory(fund.category);
   const isDaily = fund.category === "daily";
-  const cardLabel = isDaily ? "点击记账" : fund.category === "fixed" ? "已扣除" : "留存";
+  const isFixed = fund.category === "fixed";
+  const cardLabel = isDaily ? "点击记账" : "留存";
   const percentBadge = isDaily ? `<span class="fund-percent">${formatPercent(fund.incomePercent)}</span>` : "";
-  const progressText = `${formatMoney(fund.remaining)}/${formatMoney(fund.allocated)}`;
-
-  return `
-    <button class="fund-card fund-card-${fund.category}" type="button" data-id="${fund.id}" style="--fund-color: ${category.color}">
-      <div class="fund-head">
-        <p class="fund-name"><span class="fund-dot"></span>${escapeHtml(fund.name)}</p>
-        ${percentBadge}
-      </div>
-      <p class="fund-money">${formatMoney(fund.remaining)}</p>
+  const displayAmount = isFixed ? fund.allocated : fund.remaining;
+  const progressText = `${formatPlainMoney(fund.remaining)}/${formatPlainMoney(fund.allocated)}`;
+  const progressMarkup = isFixed ? "" : `
       <div class="fund-card-bottom">
         <div class="fund-progress-info">
           <span>${cardLabel}</span>
@@ -217,6 +206,16 @@ function renderFundCard(fund) {
           <span style="width: ${remainingPercent}%; background: ${category.color}"></span>
         </div>
       </div>
+  `;
+
+  return `
+    <button class="fund-card fund-card-${fund.category}" type="button" data-id="${fund.id}" style="--fund-color: ${category.color}">
+      <div class="fund-head">
+        <p class="fund-name"><span class="fund-dot"></span>${escapeHtml(fund.name)}</p>
+        ${percentBadge}
+      </div>
+      <p class="fund-money">${formatMoney(displayAmount)}</p>
+      ${progressMarkup}
     </button>
   `;
 }
@@ -228,10 +227,7 @@ function handleFundClick(event) {
   const fund = state.funds.find((item) => item.id === card.dataset.id);
   if (!fund) return;
 
-  if (fund.category !== "daily") {
-    showToast(fund.category === "fixed" ? "固定开销已直接扣除" : "储蓄类不需要记账");
-    return;
-  }
+  if (fund.category !== "daily") return;
 
   openExpense(fund.id);
 }
@@ -456,6 +452,23 @@ function updateSettingSummary() {
   amountSummary.textContent = `预算 ${formatMoney(totalAmount)}`;
 }
 
+function getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated) {
+  const income = Math.max(0, state.income);
+  if (income <= 0) return { fixed: 0, saving: 0, daily: 0 };
+
+  let used = 0;
+  const fixed = consumeSegment((fixedAllocated / income) * 100);
+  const saving = consumeSegment((savingAllocated / income) * 100);
+  const daily = consumeSegment((dailyAllocated / income) * 100);
+  return { fixed, saving, daily };
+
+  function consumeSegment(width) {
+    const nextWidth = Math.max(0, Math.min(width, 100 - used));
+    used += nextWidth;
+    return nextWidth;
+  }
+}
+
 function getRowAmount(row, income) {
   if (row.dataset.mode === "amount") {
     return Math.max(0, toMoney(row.querySelector(".fund-amount-input").value));
@@ -496,6 +509,12 @@ function formatMoney(value) {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
     currency: "CNY",
+    maximumFractionDigits: value % 1 === 0 ? 0 : 2
+  }).format(value);
+}
+
+function formatPlainMoney(value) {
+  return new Intl.NumberFormat("zh-CN", {
     maximumFractionDigits: value % 1 === 0 ? 0 : 2
   }).format(value);
 }
