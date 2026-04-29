@@ -10,6 +10,16 @@ npm run dev
 
 默认地址为 `http://127.0.0.1:5173/`。本项目暂时不依赖第三方包，开发服务器使用 Node 内置模块实现。
 
+## 部署
+
+GitHub Pages 地址：
+
+```text
+https://suxmx.github.io/moneyapp/
+```
+
+在 iPhone Safari 打开该地址后，通过分享菜单选择“添加到主屏幕”即可作为 PWA 使用。
+
 ## 验证
 
 ```powershell
@@ -20,4 +30,4 @@ npm run check
 
 ## 版本管理
 
-仓库分支为 `main`。提交前先运行受影响范围的验证；当前没有配置远程仓库，需要接入 GitHub 或其他远程时再执行 `git remote add origin <url>`。
+仓库分支为 `main`，远程仓库为 `https://github.com/Suxmx/moneyapp.git`。提交前先运行受影响范围的验证；验证通过后推送 `main`，GitHub Pages 会从仓库根目录发布。
