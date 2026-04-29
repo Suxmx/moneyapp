@@ -1,5 +1,6 @@
 const STORAGE_KEY = "moneyapp.budget.v2";
 const LEGACY_STORAGE_KEY = "moneyapp.budget.v1";
+const AUTO_SURPLUS_ID = "auto-surplus";
 const presets = [20, 50, 100, 200];
 
 const categories = [
@@ -38,6 +39,7 @@ let toastTimer = null;
 const fundList = document.querySelector("#fundList");
 const dailyAverageSpent = document.querySelector("#dailyAverageSpent");
 const dailyAverageRemaining = document.querySelector("#dailyAverageRemaining");
+const remainingDaysLabel = document.querySelector("#remainingDaysLabel");
 const summaryFixed = document.querySelector("#summaryFixed");
 const summarySaving = document.querySelector("#summarySaving");
 const summaryDaily = document.querySelector("#summaryDaily");
@@ -168,6 +170,7 @@ function render() {
 
   dailyAverageSpent.textContent = formatMoney(average.spent);
   dailyAverageRemaining.textContent = formatMoney(average.remaining);
+  remainingDaysLabel.textContent = `剩余${average.remainingDays} d`;
   summaryFixed.style.width = `${summarySegments.fixed}%`;
   summarySaving.style.width = `${summarySegments.saving}%`;
   summaryDaily.style.width = `${summarySegments.daily}%`;
@@ -366,7 +369,7 @@ function saveSpentAmount(event) {
 
 function openSettings() {
   incomeInput.value = state.income;
-  budgetEditor.innerHTML = state.funds.map(renderSettingRow).join("");
+  budgetEditor.innerHTML = state.funds.filter((fund) => fund.id !== AUTO_SURPLUS_ID).map(renderSettingRow).join("");
   syncBudgetRowsForIncome();
   settingsDialog.showModal();
 }
@@ -492,16 +495,22 @@ function saveSettings(event) {
       color: getCategory(category).color || row.dataset.color || colors[index % colors.length],
       spent: category === "daily" ? Math.max(0, toMoney(row.dataset.spent)) : 0
     };
-  }).filter((fund) => fund.name && getFundAllocation(fund, income) > 0);
+  }).filter((fund) => fund.id !== AUTO_SURPLUS_ID && fund.name && getFundAllocation(fund, income) > 0);
 
   if (income <= 0) {
     showToast("收入需要大于 0");
     return;
   }
 
-  if (!nextFunds.length) {
-    showToast("至少保留一个用途");
+  const allocatedAmount = nextFunds.reduce((total, fund) => total + getFundAllocation(fund, income), 0);
+  if (allocatedAmount > income + 0.01) {
+    showToast("分配不能超过 100%");
     return;
+  }
+
+  const remainder = roundMoney(income - allocatedAmount);
+  if (remainder > 0) {
+    nextFunds.push(createSurplusFund(remainder));
   }
 
   state = { ...state, income, funds: nextFunds };
@@ -509,6 +518,20 @@ function saveSettings(event) {
   settingsDialog.close();
   render();
   showToast("预算已更新");
+}
+
+function createSurplusFund(amount) {
+  const category = getCategory("saving");
+  return {
+    id: AUTO_SURPLUS_ID,
+    name: "结余",
+    category: "saving",
+    mode: "amount",
+    percent: 0,
+    amount,
+    color: category.color,
+    spent: 0
+  };
 }
 
 function syncBudgetRowsForIncome() {
@@ -555,7 +578,8 @@ function getMonthlyAverages(spent, remaining) {
 
   return {
     spent: roundMoney(spent / elapsedDays),
-    remaining: roundMoney(remaining / remainingDays)
+    remaining: roundMoney(remaining / remainingDays),
+    remainingDays
   };
 }
 

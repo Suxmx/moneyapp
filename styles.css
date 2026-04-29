@@ -165,6 +165,17 @@ h2 {
   font-weight: 780;
 }
 
+.summary-label-stack {
+  display: grid;
+  gap: 3px;
+}
+
+.summary-label-stack small {
+  color: #8aa0b4;
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
 .summary-metric strong {
   color: var(--ink);
   font-size: clamp(1.55rem, 8vw, 2.25rem);
