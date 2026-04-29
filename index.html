@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f8f5ef" />
+    <meta name="theme-color" content="#f5fbff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="月度口袋" />
@@ -72,7 +72,7 @@
             <p class="eyebrow">快速记一笔</p>
             <h2 id="expenseTitle">记录支出</h2>
           </div>
-          <button class="icon-button subtle" value="cancel" type="submit" aria-label="关闭">
+          <button class="icon-button subtle" value="cancel" type="submit" formnovalidate aria-label="关闭">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m6 6 12 12M18 6 6 18" />
             </svg>
@@ -85,7 +85,7 @@
         </label>
         <div class="preset-grid" id="presetGrid" aria-label="常用金额"></div>
         <menu class="dialog-actions">
-          <button class="secondary-button" value="cancel" type="submit">取消</button>
+          <button class="secondary-button" value="cancel" type="submit" formnovalidate>取消</button>
           <button class="primary-button" id="saveExpense" value="default" type="submit">记账</button>
         </menu>
       </form>
@@ -98,7 +98,7 @@
             <p class="eyebrow">预算设置</p>
             <h2 id="settingsTitle">分配本月收入</h2>
           </div>
-          <button class="icon-button subtle" value="cancel" type="submit" aria-label="关闭">
+          <button class="icon-button subtle" value="cancel" type="submit" formnovalidate aria-label="关闭">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m6 6 12 12M18 6 6 18" />
             </svg>
@@ -120,7 +120,7 @@
           添加用途
         </button>
         <menu class="dialog-actions">
-          <button class="secondary-button" value="cancel" type="submit">取消</button>
+          <button class="secondary-button" value="cancel" type="submit" formnovalidate>取消</button>
           <button class="primary-button" id="saveSettings" value="default" type="submit">保存</button>
         </menu>
       </form>

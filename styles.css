@@ -1,17 +1,18 @@
 :root {
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --bg: #f8f5ef;
-  --ink: #181614;
-  --muted: #746d63;
-  --line: #e6ded2;
-  --panel: #fffaf2;
-  --panel-strong: #ffffff;
-  --teal: #20867a;
-  --coral: #d96c4f;
-  --yellow: #e5b84c;
-  --blue: #547aa5;
-  --shadow: 0 18px 55px rgba(54, 42, 25, 0.12);
+  --bg: #f5fbff;
+  --ink: #102033;
+  --muted: #66788d;
+  --line: #dcecf6;
+  --panel: #ffffff;
+  --panel-tint: #f2fbf7;
+  --blue: #67a8ff;
+  --blue-strong: #2f7de1;
+  --green: #8bdc9a;
+  --mint: #48c7b5;
+  --track: #e6f0f7;
+  --shadow: 0 18px 44px rgba(67, 133, 180, 0.14);
 }
 
 * {
@@ -27,13 +28,14 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 245, 239, 0.8) 44%, rgba(247, 241, 229, 0.92)),
-    var(--bg);
+    radial-gradient(circle at top left, rgba(139, 220, 154, 0.26), transparent 34rem),
+    linear-gradient(180deg, #fbfeff 0%, #f5fbff 46%, #eef8ff 100%);
   color: var(--ink);
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -53,7 +55,10 @@ button {
 .top-bar,
 .sheet-header,
 .dialog-actions,
-.setting-summary {
+.setting-summary,
+.fund-head,
+.fund-progress-info,
+.group-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -69,7 +74,7 @@ button {
   margin: 0 0 5px;
   color: var(--muted);
   font-size: 0.76rem;
-  font-weight: 700;
+  font-weight: 720;
 }
 
 h1,
@@ -84,7 +89,7 @@ h1 {
 }
 
 h2 {
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   line-height: 1.15;
 }
 
@@ -92,10 +97,10 @@ h2 {
 .tab-button {
   display: grid;
   place-items: center;
-  border: 1px solid rgba(24, 22, 20, 0.08);
-  background: var(--panel-strong);
-  color: var(--ink);
-  box-shadow: 0 10px 28px rgba(54, 42, 25, 0.08);
+  border: 1px solid rgba(103, 168, 255, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--blue-strong);
+  box-shadow: 0 10px 28px rgba(67, 133, 180, 0.12);
   cursor: pointer;
 }
 
@@ -123,19 +128,19 @@ h2 {
   width: 38px;
   height: 38px;
   border-color: transparent;
-  background: #f4eee4;
+  background: #eef8ff;
   box-shadow: none;
 }
 
 .summary-panel {
   display: grid;
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
   padding: 18px;
-  border: 1px solid rgba(24, 22, 20, 0.08);
+  border: 1px solid rgba(103, 168, 255, 0.16);
   border-radius: 22px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(255, 250, 242, 0.96)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 253, 249, 0.88)),
     var(--panel);
   box-shadow: var(--shadow);
 }
@@ -157,12 +162,12 @@ h2 {
 .summary-stats span {
   min-height: 32px;
   padding: 8px 10px;
-  border: 1px solid rgba(24, 22, 20, 0.08);
+  border: 1px solid rgba(103, 168, 255, 0.18);
   border-radius: 999px;
-  background: #f4eee4;
-  color: #4e463d;
+  background: #eef8ff;
+  color: #315f92;
   font-size: 0.82rem;
-  font-weight: 750;
+  font-weight: 760;
 }
 
 .summary-track,
@@ -171,7 +176,7 @@ h2 {
   height: 10px;
   overflow: hidden;
   border-radius: 999px;
-  background: #ece3d5;
+  background: var(--track);
 }
 
 .summary-track span,
@@ -180,23 +185,58 @@ h2 {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: var(--teal);
+  background: var(--mint);
   transition: width 180ms ease;
 }
 
-.fund-list {
+.fund-list,
+.fund-group-list {
   display: grid;
   gap: 12px;
 }
 
+.fund-list {
+  gap: 24px;
+}
+
+.fund-group {
+  display: grid;
+  gap: 10px;
+}
+
+.group-heading {
+  align-items: flex-end;
+  padding: 0 2px;
+}
+
+.group-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.group-heading span {
+  min-width: 30px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 820;
+  text-align: center;
+}
+
 .fund-card {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   min-height: 132px;
   padding: 16px;
-  border: 1px solid rgba(24, 22, 20, 0.08);
+  border: 1px solid rgba(103, 168, 255, 0.15);
   border-radius: 20px;
-  background: var(--panel-strong);
-  box-shadow: 0 14px 34px rgba(54, 42, 25, 0.08);
+  background: var(--panel);
+  box-shadow: 0 14px 34px rgba(67, 133, 180, 0.1);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
@@ -206,12 +246,12 @@ h2 {
   transform: scale(0.99);
 }
 
-.fund-head,
-.fund-meta {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+.fund-card-fixed {
+  background: linear-gradient(135deg, #ffffff, #f0f7ff);
+}
+
+.fund-card-saving {
+  background: linear-gradient(135deg, #ffffff, #f1fbf2);
 }
 
 .fund-name {
@@ -235,40 +275,47 @@ h2 {
 
 .fund-percent {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--blue-strong);
   font-size: 0.86rem;
-  font-weight: 760;
+  font-weight: 780;
 }
 
 .fund-money {
-  margin: 14px 0 13px;
+  margin: 16px 0 18px;
   font-size: 2rem;
   font-weight: 850;
   line-height: 1;
 }
 
-.fund-meta {
-  margin-top: 10px;
+.fund-card-bottom {
+  display: grid;
+  gap: 5px;
+  margin-top: auto;
+}
+
+.fund-progress-info {
+  align-items: flex-end;
   color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 760;
 }
 
-.fund-meta span {
-  min-width: 0;
-}
-
-.fund-meta span:last-child {
+.fund-progress-info span:last-child {
   text-align: right;
 }
 
 .empty-state {
   padding: 24px 18px;
-  border: 1px dashed #d8ccbd;
+  border: 1px dashed #c8dfef;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.56);
+  background: rgba(255, 255, 255, 0.62);
   color: var(--muted);
   text-align: center;
+}
+
+.empty-state.compact {
+  padding: 16px;
+  font-size: 0.86rem;
 }
 
 .bottom-tabs {
@@ -279,9 +326,9 @@ h2 {
   grid-template-columns: repeat(3, 48px);
   gap: 8px;
   padding: 8px;
-  border: 1px solid rgba(24, 22, 20, 0.1);
+  border: 1px solid rgba(103, 168, 255, 0.18);
   border-radius: 28px;
-  background: rgba(255, 250, 242, 0.86);
+  background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
 }
@@ -292,12 +339,12 @@ h2 {
   border-radius: 50%;
   background: transparent;
   box-shadow: none;
-  color: #82786b;
+  color: #6f89a6;
 }
 
 .tab-button.active {
-  background: var(--ink);
-  color: #fffaf2;
+  background: var(--blue-strong);
+  color: #ffffff;
 }
 
 .sheet {
@@ -306,13 +353,13 @@ h2 {
   padding: 0;
   border: 0;
   border-radius: 26px;
-  background: var(--panel-strong);
+  background: var(--panel);
   color: var(--ink);
-  box-shadow: 0 22px 70px rgba(24, 22, 20, 0.28);
+  box-shadow: 0 22px 70px rgba(42, 94, 137, 0.28);
 }
 
 .sheet::backdrop {
-  background: rgba(24, 22, 20, 0.38);
+  background: rgba(16, 32, 51, 0.34);
   backdrop-filter: blur(5px);
 }
 
@@ -344,21 +391,41 @@ h2 {
 }
 
 .input-group input,
-.budget-field input {
+.budget-field input,
+.budget-field select {
   width: 100%;
   min-height: 48px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fffaf2;
+  background: #fbfeff;
   color: var(--ink);
   padding: 11px 12px;
   outline: none;
 }
 
+.budget-field select {
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, #6f89a6 50%),
+    linear-gradient(135deg, #6f89a6 50%, transparent 50%),
+    #fbfeff;
+  background-position:
+    calc(100% - 17px) 21px,
+    calc(100% - 12px) 21px,
+    0 0;
+  background-size:
+    5px 5px,
+    5px 5px,
+    100% 100%;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+}
+
 .input-group input:focus,
-.budget-field input:focus {
-  border-color: color-mix(in srgb, var(--teal) 72%, white);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--teal) 14%, transparent);
+.budget-field input:focus,
+.budget-field select:focus {
+  border-color: color-mix(in srgb, var(--blue) 72%, white);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 16%, transparent);
 }
 
 .preset-grid {
@@ -381,14 +448,14 @@ h2 {
 .preset-grid button,
 .secondary-button,
 .add-button {
-  background: #f4eee4;
-  color: #403a33;
+  background: #eef8ff;
+  color: #315f92;
 }
 
 .primary-button {
   min-width: 112px;
-  background: var(--ink);
-  color: #fffaf2;
+  background: var(--blue-strong);
+  color: #ffffff;
 }
 
 .secondary-button {
@@ -404,8 +471,8 @@ h2 {
   min-height: 38px;
   padding: 10px 12px;
   border-radius: 14px;
-  background: #f4eee4;
-  color: #4e463d;
+  background: #eef8ff;
+  color: #315f92;
   font-size: 0.84rem;
   font-weight: 800;
 }
@@ -417,13 +484,16 @@ h2 {
 
 .budget-row {
   display: grid;
-  grid-template-columns: 1fr 92px 38px;
+  grid-template-columns: 1fr 112px 38px;
+  grid-template-areas:
+    "name category remove"
+    "percent amount remove";
   gap: 8px;
   align-items: end;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: #fffaf2;
+  background: #fbfeff;
 }
 
 .budget-field {
@@ -431,15 +501,32 @@ h2 {
   gap: 6px;
 }
 
+.budget-name-field {
+  grid-area: name;
+}
+
+.budget-category-field {
+  grid-area: category;
+}
+
+.budget-percent-field {
+  grid-area: percent;
+}
+
+.budget-amount-field {
+  grid-area: amount;
+}
+
 .remove-button {
   display: grid;
+  grid-area: remove;
   place-items: center;
   width: 38px;
   height: 48px;
   border: 0;
   border-radius: 12px;
-  background: #f3e6de;
-  color: #a0432f;
+  background: #edf7f2;
+  color: #29936d;
   cursor: pointer;
 }
 
@@ -458,8 +545,8 @@ h2 {
   max-width: min(320px, calc(100vw - 36px));
   padding: 11px 14px;
   border-radius: 999px;
-  background: rgba(24, 22, 20, 0.92);
-  color: #fffaf2;
+  background: rgba(16, 32, 51, 0.92);
+  color: #ffffff;
   font-size: 0.86rem;
   font-weight: 750;
   opacity: 0;
@@ -484,27 +571,21 @@ h2 {
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
   .app-shell {
     padding-right: 12px;
     padding-left: 12px;
-  }
-
-  .budget-row {
-    grid-template-columns: 1fr 78px 38px;
   }
 
   .bottom-tabs {
     right: 12px;
   }
 
-  .fund-meta {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .fund-meta span:last-child {
-    text-align: left;
+  .budget-row {
+    grid-template-columns: 1fr 38px;
+    grid-template-areas:
+      "name remove"
+      "category remove"
+      "percent amount";
   }
 }

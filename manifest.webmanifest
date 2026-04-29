@@ -4,8 +4,8 @@
   "description": "按用途分配当月收入，并快速记录支出的自用记账 PWA。",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f8f5ef",
-  "theme_color": "#f8f5ef",
+  "background_color": "#f5fbff",
+  "theme_color": "#f5fbff",
   "orientation": "portrait",
   "icons": [
     {

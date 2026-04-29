@@ -1,13 +1,39 @@
-const STORAGE_KEY = "moneyapp.budget.v1";
+const STORAGE_KEY = "moneyapp.budget.v2";
+const LEGACY_STORAGE_KEY = "moneyapp.budget.v1";
 const presets = [20, 50, 100, 200];
-const colors = ["#20867a", "#d96c4f", "#547aa5", "#e5b84c", "#8b6bb1", "#4c8f62"];
+
+const categories = [
+  {
+    id: "daily",
+    label: "日常类",
+    hint: "点击条目快速记账",
+    empty: "还没有日常用途，可以在设置里添加。",
+    color: "#48c7b5"
+  },
+  {
+    id: "fixed",
+    label: "固定开销类",
+    hint: "设置后直接扣除",
+    empty: "还没有固定开销。",
+    color: "#67a8ff"
+  },
+  {
+    id: "saving",
+    label: "储蓄类",
+    hint: "留存不记账",
+    empty: "还没有储蓄用途。",
+    color: "#8bdc9a"
+  }
+];
+
+const colors = ["#48c7b5", "#67a8ff", "#8bdc9a", "#78c6ff", "#60d394", "#91b7ff"];
 
 const defaultState = {
   income: 10000,
   funds: [
-    { id: "living", name: "生活", percent: 50, color: colors[0], spent: 800 },
-    { id: "rent", name: "房租", percent: 30, color: colors[1], spent: 0 },
-    { id: "saving", name: "储蓄", percent: 20, color: colors[2], spent: 0 }
+    { id: "living", name: "生活", category: "daily", mode: "percent", percent: 50, amount: 0, color: colors[0], spent: 800 },
+    { id: "rent", name: "房租", category: "fixed", mode: "amount", percent: 0, amount: 3000, color: colors[1], spent: 0 },
+    { id: "saving", name: "储蓄", category: "saving", mode: "percent", percent: 20, amount: 0, color: colors[2], spent: 0 }
   ],
   history: []
 };
@@ -40,8 +66,11 @@ document.querySelector("#openSettings").addEventListener("click", openSettings);
 document.querySelector("#addFund").addEventListener("click", addSettingRow);
 expenseForm.addEventListener("submit", saveExpense);
 settingsForm.addEventListener("submit", saveSettings);
-incomeInput.addEventListener("input", updateSettingSummary);
-budgetEditor.addEventListener("input", updateSettingSummary);
+incomeInput.addEventListener("input", syncBudgetRowsForIncome);
+budgetEditor.addEventListener("input", handleBudgetEditorInput);
+budgetEditor.addEventListener("change", handleBudgetEditorInput);
+budgetEditor.addEventListener("click", handleBudgetEditorClick);
+fundList.addEventListener("click", handleFundClick);
 
 presetGrid.innerHTML = presets
   .map((amount) => `<button type="button" data-amount="${amount}">¥${amount}</button>`)
@@ -65,10 +94,9 @@ render();
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return structuredClone(defaultState);
-    const parsed = JSON.parse(raw);
-    return normalizeState(parsed);
+    return normalizeState(JSON.parse(raw));
   } catch {
     return structuredClone(defaultState);
   }
@@ -77,13 +105,23 @@ function loadState() {
 function normalizeState(input) {
   const income = toMoney(input.income) || defaultState.income;
   const funds = Array.isArray(input.funds) && input.funds.length
-    ? input.funds.map((fund, index) => ({
-        id: fund.id || createId(),
-        name: String(fund.name || `用途 ${index + 1}`).slice(0, 12),
-        percent: clamp(toMoney(fund.percent), 0, 100),
-        color: fund.color || colors[index % colors.length],
-        spent: Math.max(0, toMoney(fund.spent))
-      }))
+    ? input.funds.map((fund, index) => {
+        const category = normalizeCategory(fund.category || inferLegacyCategory(fund));
+        const mode = fund.mode === "amount" ? "amount" : "percent";
+        const percent = Math.max(0, toMoney(fund.percent));
+        const amount = Math.max(0, toMoney(fund.amount));
+
+        return {
+          id: fund.id || createId(),
+          name: String(fund.name || `用途 ${index + 1}`).slice(0, 12),
+          category,
+          mode: mode === "amount" && amount > 0 ? "amount" : "percent",
+          percent,
+          amount,
+          color: fund.color || getCategory(category).color || colors[index % colors.length],
+          spent: Math.max(0, toMoney(fund.spent))
+        };
+      })
     : structuredClone(defaultState.funds);
 
   return {
@@ -91,6 +129,20 @@ function normalizeState(input) {
     funds,
     history: Array.isArray(input.history) ? input.history : []
   };
+}
+
+function inferLegacyCategory(fund) {
+  if (fund.id === "rent" || fund.name === "房租") return "fixed";
+  if (fund.id === "saving" || fund.name === "储蓄") return "saving";
+  return "daily";
+}
+
+function normalizeCategory(category) {
+  return categories.some((item) => item.id === category) ? category : "daily";
+}
+
+function getCategory(categoryId) {
+  return categories.find((category) => category.id === categoryId) || categories[0];
 }
 
 function saveState() {
@@ -102,15 +154,16 @@ function render() {
   monthTitle.textContent = `${month}口袋`;
 
   const viewFunds = state.funds.map(toViewFund);
+  const dailyFunds = viewFunds.filter((fund) => fund.category === "daily");
+  const dailyAllocated = sum(dailyFunds, "allocated");
+  const dailyRemaining = sum(dailyFunds, "remaining");
+  const dailySpent = sum(dailyFunds, "spent");
   const totalAllocated = sum(viewFunds, "allocated");
-  const remaining = sum(viewFunds, "remaining");
-  const spent = sum(viewFunds, "spent");
-  const percentTotal = sum(state.funds, "percent");
-  const usedPercent = totalAllocated > 0 ? Math.min(100, (spent / totalAllocated) * 100) : 0;
+  const usedPercent = dailyAllocated > 0 ? Math.min(100, (dailySpent / dailyAllocated) * 100) : 0;
 
-  totalRemaining.textContent = formatMoney(remaining);
-  spentRatio.textContent = `已用 ${formatPercent(usedPercent)}`;
-  allocationRatio.textContent = `分配 ${formatPercent(percentTotal)}`;
+  totalRemaining.textContent = formatMoney(dailyRemaining);
+  spentRatio.textContent = `日常已用 ${formatPercent(usedPercent)}`;
+  allocationRatio.textContent = `已分配 ${formatMoney(totalAllocated)}`;
   summaryFill.style.width = `${usedPercent}%`;
 
   if (!viewFunds.length) {
@@ -118,37 +171,74 @@ function render() {
     return;
   }
 
-  fundList.innerHTML = viewFunds.map(renderFundCard).join("");
-  fundList.querySelectorAll(".fund-card").forEach((card) => {
-    card.addEventListener("click", () => openExpense(card.dataset.id));
-  });
+  fundList.innerHTML = categories
+    .map((category) => renderFundGroup(category, viewFunds.filter((fund) => fund.category === category.id)))
+    .join("");
+}
+
+function renderFundGroup(category, funds) {
+  return `
+    <section class="fund-group category-${category.id}" aria-labelledby="group-${category.id}">
+      <div class="group-heading">
+        <div>
+          <h2 id="group-${category.id}">${category.label}</h2>
+          <p>${category.hint}</p>
+        </div>
+        <span>${funds.length}</span>
+      </div>
+      <div class="fund-group-list">
+        ${funds.length ? funds.map(renderFundCard).join("") : `<div class="empty-state compact">${category.empty}</div>`}
+      </div>
+    </section>
+  `;
 }
 
 function renderFundCard(fund) {
-  const remainingPercent = fund.allocated > 0 ? Math.max(0, (fund.remaining / fund.allocated) * 100) : 0;
-  const spentText = fund.spent > 0 ? `已花 ${formatMoney(fund.spent)}` : "还没动用";
+  const remainingPercent = fund.allocated > 0 ? Math.max(0, Math.min(100, (fund.remaining / fund.allocated) * 100)) : 0;
+  const category = getCategory(fund.category);
+  const isDaily = fund.category === "daily";
+  const cardLabel = isDaily ? "点击记账" : fund.category === "fixed" ? "已扣除" : "留存";
+  const percentBadge = isDaily ? `<span class="fund-percent">${formatPercent(fund.incomePercent)}</span>` : "";
+  const progressText = `${formatMoney(fund.remaining)}/${formatMoney(fund.allocated)}`;
 
   return `
-    <button class="fund-card" type="button" data-id="${fund.id}" style="--fund-color: ${fund.color}">
+    <button class="fund-card fund-card-${fund.category}" type="button" data-id="${fund.id}" style="--fund-color: ${category.color}">
       <div class="fund-head">
         <p class="fund-name"><span class="fund-dot"></span>${escapeHtml(fund.name)}</p>
-        <span class="fund-percent">${formatPercent(fund.percent)}</span>
+        ${percentBadge}
       </div>
       <p class="fund-money">${formatMoney(fund.remaining)}</p>
-      <div class="fund-track" aria-hidden="true">
-        <span style="width: ${remainingPercent}%; background: ${fund.color}"></span>
-      </div>
-      <div class="fund-meta">
-        <span>${spentText}</span>
-        <span>预算 ${formatMoney(fund.allocated)}</span>
+      <div class="fund-card-bottom">
+        <div class="fund-progress-info">
+          <span>${cardLabel}</span>
+          <span>${progressText}</span>
+        </div>
+        <div class="fund-track" aria-hidden="true">
+          <span style="width: ${remainingPercent}%; background: ${category.color}"></span>
+        </div>
       </div>
     </button>
   `;
 }
 
+function handleFundClick(event) {
+  const card = event.target.closest(".fund-card");
+  if (!card) return;
+
+  const fund = state.funds.find((item) => item.id === card.dataset.id);
+  if (!fund) return;
+
+  if (fund.category !== "daily") {
+    showToast(fund.category === "fixed" ? "固定开销已直接扣除" : "储蓄类不需要记账");
+    return;
+  }
+
+  openExpense(fund.id);
+}
+
 function openExpense(fundId) {
   const fund = state.funds.find((item) => item.id === fundId);
-  if (!fund) return;
+  if (!fund || fund.category !== "daily") return;
 
   const viewFund = toViewFund(fund);
   activeFundId = fundId;
@@ -169,7 +259,7 @@ function saveExpense(event) {
 
   const amount = toMoney(expenseAmount.value);
   const fund = state.funds.find((item) => item.id === activeFundId);
-  if (!fund || amount <= 0) {
+  if (!fund || fund.category !== "daily" || amount <= 0) {
     showToast("请输入有效金额");
     return;
   }
@@ -198,23 +288,37 @@ function saveExpense(event) {
 function openSettings() {
   incomeInput.value = state.income;
   budgetEditor.innerHTML = state.funds.map(renderSettingRow).join("");
-  attachRemoveHandlers();
-  updateSettingSummary();
+  syncBudgetRowsForIncome();
   settingsDialog.showModal();
 }
 
-function renderSettingRow(fund, index) {
+function renderSettingRow(fund) {
+  const viewFund = toViewFund(fund);
+  const mode = fund.mode === "amount" ? "amount" : "percent";
+  const percentValue = mode === "percent" ? fund.percent : viewFund.incomePercent;
+  const amountValue = mode === "amount" ? fund.amount : viewFund.allocated;
+
   return `
-    <div class="budget-row" data-id="${fund.id}" data-spent="${fund.spent}" data-color="${fund.color}">
-      <label class="budget-field">
+    <div class="budget-row" data-id="${fund.id}" data-spent="${fund.spent}" data-color="${fund.color}" data-mode="${mode}">
+      <label class="budget-field budget-name-field">
         <span>用途</span>
         <input class="fund-name-input" maxlength="12" value="${escapeHtml(fund.name)}" required />
       </label>
-      <label class="budget-field">
-        <span>比例 %</span>
-        <input class="fund-percent-input" inputmode="decimal" min="0" max="100" step="1" type="number" value="${fund.percent}" required />
+      <label class="budget-field budget-category-field">
+        <span>分类</span>
+        <select class="fund-category-input">
+          ${categories.map((category) => `<option value="${category.id}" ${category.id === fund.category ? "selected" : ""}>${category.label}</option>`).join("")}
+        </select>
       </label>
-      <button class="remove-button" type="button" aria-label="删除用途 ${index + 1}">
+      <label class="budget-field budget-percent-field">
+        <span>比例 %</span>
+        <input class="fund-percent-input" inputmode="decimal" min="0" step="0.1" type="number" value="${formatInputNumber(percentValue)}" />
+      </label>
+      <label class="budget-field budget-amount-field">
+        <span>金额</span>
+        <input class="fund-amount-input" inputmode="decimal" min="0" step="1" type="number" value="${formatInputNumber(amountValue)}" />
+      </label>
+      <button class="remove-button" type="button" aria-label="删除用途">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M5 12h14" />
         </svg>
@@ -223,29 +327,52 @@ function renderSettingRow(fund, index) {
   `;
 }
 
-function attachRemoveHandlers() {
-  budgetEditor.querySelectorAll(".remove-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      button.closest(".budget-row").remove();
-      updateSettingSummary();
-    });
-  });
+function handleBudgetEditorInput(event) {
+  const row = event.target.closest(".budget-row");
+  if (!row) return;
+
+  if (event.target.classList.contains("fund-percent-input")) {
+    row.dataset.mode = "percent";
+    syncRowFromPercent(row);
+  }
+
+  if (event.target.classList.contains("fund-amount-input")) {
+    row.dataset.mode = "amount";
+    syncRowFromAmount(row);
+  }
+
+  if (event.target.classList.contains("fund-category-input")) {
+    const category = getCategory(event.target.value);
+    row.dataset.color = category.color;
+  }
+
+  updateSettingSummary();
+}
+
+function handleBudgetEditorClick(event) {
+  const removeButton = event.target.closest(".remove-button");
+  if (!removeButton) return;
+  removeButton.closest(".budget-row").remove();
+  updateSettingSummary();
 }
 
 function addSettingRow() {
   const index = budgetEditor.querySelectorAll(".budget-row").length;
+  const category = categories[0];
   const fund = {
     id: createId(),
     name: `新用途 ${index + 1}`,
+    category: category.id,
+    mode: "percent",
     percent: 10,
-    color: colors[index % colors.length],
+    amount: 0,
+    color: category.color,
     spent: 0
   };
-  budgetEditor.insertAdjacentHTML("beforeend", renderSettingRow(fund, index));
-  attachRemoveHandlers();
+  budgetEditor.insertAdjacentHTML("beforeend", renderSettingRow(fund));
+  syncRowFromPercent(budgetEditor.lastElementChild);
   updateSettingSummary();
-  const newRow = budgetEditor.lastElementChild;
-  newRow?.querySelector(".fund-name-input")?.select();
+  budgetEditor.lastElementChild?.querySelector(".fund-name-input")?.select();
 }
 
 function saveSettings(event) {
@@ -258,13 +385,23 @@ function saveSettings(event) {
 
   const income = toMoney(incomeInput.value);
   const rows = [...budgetEditor.querySelectorAll(".budget-row")];
-  const nextFunds = rows.map((row, index) => ({
-    id: row.dataset.id || createId(),
-    name: row.querySelector(".fund-name-input").value.trim(),
-    percent: clamp(toMoney(row.querySelector(".fund-percent-input").value), 0, 100),
-    color: row.dataset.color || colors[index % colors.length],
-    spent: Math.max(0, toMoney(row.dataset.spent))
-  })).filter((fund) => fund.name && fund.percent > 0);
+  const nextFunds = rows.map((row, index) => {
+    const mode = row.dataset.mode === "amount" ? "amount" : "percent";
+    const category = normalizeCategory(row.querySelector(".fund-category-input").value);
+    const percent = Math.max(0, toMoney(row.querySelector(".fund-percent-input").value));
+    const amount = Math.max(0, toMoney(row.querySelector(".fund-amount-input").value));
+
+    return {
+      id: row.dataset.id || createId(),
+      name: row.querySelector(".fund-name-input").value.trim(),
+      category,
+      mode: mode === "amount" && amount > 0 ? "amount" : "percent",
+      percent,
+      amount,
+      color: getCategory(category).color || row.dataset.color || colors[index % colors.length],
+      spent: category === "daily" ? Math.max(0, toMoney(row.dataset.spent)) : 0
+    };
+  }).filter((fund) => fund.name && getFundAllocation(fund, income) > 0);
 
   if (income <= 0) {
     showToast("收入需要大于 0");
@@ -283,18 +420,63 @@ function saveSettings(event) {
   showToast("预算已更新");
 }
 
+function syncBudgetRowsForIncome() {
+  budgetEditor.querySelectorAll(".budget-row").forEach((row) => {
+    if (row.dataset.mode === "amount") {
+      syncRowFromAmount(row);
+    } else {
+      syncRowFromPercent(row);
+    }
+  });
+  updateSettingSummary();
+}
+
+function syncRowFromPercent(row) {
+  const income = toMoney(incomeInput.value);
+  const percentInput = row.querySelector(".fund-percent-input");
+  const amountInput = row.querySelector(".fund-amount-input");
+  const percent = Math.max(0, toMoney(percentInput.value));
+  amountInput.value = formatInputNumber((income * percent) / 100);
+}
+
+function syncRowFromAmount(row) {
+  const income = toMoney(incomeInput.value);
+  const percentInput = row.querySelector(".fund-percent-input");
+  const amountInput = row.querySelector(".fund-amount-input");
+  const amount = Math.max(0, toMoney(amountInput.value));
+  percentInput.value = formatInputNumber(income > 0 ? (amount / income) * 100 : 0);
+}
+
 function updateSettingSummary() {
   const income = toMoney(incomeInput.value);
-  const percents = [...budgetEditor.querySelectorAll(".fund-percent-input")].map((input) => toMoney(input.value));
-  const percentTotal = percents.reduce((total, value) => total + value, 0);
+  const rows = [...budgetEditor.querySelectorAll(".budget-row")];
+  const totalAmount = rows.reduce((total, row) => total + getRowAmount(row, income), 0);
+  const percentTotal = income > 0 ? (totalAmount / income) * 100 : 0;
   percentSummary.textContent = `已分配 ${formatPercent(percentTotal)}`;
-  amountSummary.textContent = `预算 ${formatMoney((income * percentTotal) / 100)}`;
+  amountSummary.textContent = `预算 ${formatMoney(totalAmount)}`;
+}
+
+function getRowAmount(row, income) {
+  if (row.dataset.mode === "amount") {
+    return Math.max(0, toMoney(row.querySelector(".fund-amount-input").value));
+  }
+  return Math.max(0, (income * toMoney(row.querySelector(".fund-percent-input").value)) / 100);
 }
 
 function toViewFund(fund) {
-  const allocated = roundMoney((state.income * fund.percent) / 100);
-  const remaining = Math.max(0, roundMoney(allocated - fund.spent));
-  return { ...fund, allocated, remaining };
+  const allocated = getFundAllocation(fund, state.income);
+  const rawSpent = fund.category === "fixed" ? allocated : fund.category === "daily" ? fund.spent : 0;
+  const spent = Math.min(allocated, Math.max(0, rawSpent));
+  const remaining = Math.max(0, roundMoney(allocated - spent));
+  const incomePercent = state.income > 0 ? (allocated / state.income) * 100 : 0;
+  return { ...fund, allocated, spent, remaining, incomePercent };
+}
+
+function getFundAllocation(fund, income) {
+  if (fund.mode === "amount") {
+    return Math.max(0, toMoney(fund.amount));
+  }
+  return Math.max(0, roundMoney((income * toMoney(fund.percent)) / 100));
 }
 
 function toMoney(value) {
@@ -304,10 +486,6 @@ function toMoney(value) {
 
 function roundMoney(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
 
 function sum(items, key) {
@@ -325,6 +503,11 @@ function formatMoney(value) {
 function formatPercent(value) {
   const rounded = Math.round(value * 10) / 10;
   return `${rounded}%`;
+}
+
+function formatInputNumber(value) {
+  const number = roundMoney(value);
+  return Number.isInteger(number) ? String(number) : String(number);
 }
 
 function createId() {
