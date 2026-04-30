@@ -42,6 +42,30 @@
 
       <section class="fund-list" id="fundList" aria-label="资金用途列表"></section>
       <section class="details-list" id="detailsView" aria-label="支出明细" hidden></section>
+      <section class="cloud-view" id="cloudView" aria-label="云端同步" hidden>
+        <form class="cloud-form" id="cloudForm">
+          <div class="page-heading">
+            <p class="eyebrow">云端同步</p>
+            <h2 id="cloudStatus">未登录</h2>
+          </div>
+          <div class="cloud-auth-panel" id="cloudAuthPanel">
+            <label class="input-group">
+              <span>邮箱</span>
+              <input id="cloudEmail" autocomplete="email" inputmode="email" type="email" />
+            </label>
+            <label class="input-group">
+              <span>密码</span>
+              <input id="cloudPassword" autocomplete="current-password" type="password" />
+            </label>
+            <button class="primary-button" id="cloudAuth" type="submit">注册/登录</button>
+          </div>
+          <div class="cloud-actions" id="cloudSyncPanel" hidden>
+            <button class="secondary-button" id="cloudPush" type="button">同步到云端</button>
+            <button class="secondary-button" id="cloudPull" type="button">从云端恢复</button>
+            <button class="danger-button" id="cloudSignOut" type="button">退出登录</button>
+          </div>
+        </form>
+      </section>
       <section class="settings-view" id="settingsView" aria-label="预算设置" hidden>
         <form class="settings-form" id="settingsForm">
           <div class="page-heading">
@@ -68,26 +92,6 @@
             <button class="primary-button" id="saveSettings" value="default" type="submit">保存</button>
           </menu>
         </form>
-        <form class="cloud-form" id="cloudForm">
-          <div class="page-heading">
-            <p class="eyebrow">云端同步</p>
-            <h2 id="cloudStatus">未登录</h2>
-          </div>
-          <label class="input-group">
-            <span>邮箱</span>
-            <input id="cloudEmail" autocomplete="email" inputmode="email" type="email" />
-          </label>
-          <label class="input-group">
-            <span>密码</span>
-            <input id="cloudPassword" autocomplete="current-password" type="password" />
-          </label>
-          <div class="cloud-actions">
-            <button class="primary-button" id="cloudAuth" type="submit">注册/登录</button>
-            <button class="secondary-button" id="cloudPush" type="button">同步到云端</button>
-            <button class="secondary-button" id="cloudPull" type="button">从云端恢复</button>
-            <button class="danger-button" id="cloudSignOut" type="button">退出登录</button>
-          </div>
-        </form>
       </section>
 
       <nav class="bottom-tabs" id="bottomTabs" aria-label="页面导航">
@@ -101,6 +105,12 @@
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M7 4h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2-2-1.34V6a2 2 0 0 1 2-2Z" />
             <path d="M9 9h6M9 13h6" />
+          </svg>
+        </button>
+        <button class="tab-button" type="button" data-view="cloud" aria-label="云端">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7.5 18.5h9.25a4 4 0 0 0 .74-7.93A5.5 5.5 0 0 0 6.88 9.1 4.75 4.75 0 0 0 7.5 18.5Z" />
+            <path d="M9 14.5h6M12 11.5v6" />
           </svg>
         </button>
         <button class="tab-button" type="button" data-view="settings" aria-label="设置">

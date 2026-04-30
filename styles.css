@@ -229,8 +229,10 @@ h2 {
 .fund-list,
 .fund-group-list,
 .details-list,
+.cloud-view,
 .settings-view,
 .settings-form,
+.cloud-auth-panel,
 .cloud-form {
   display: grid;
   gap: 12px;
@@ -408,6 +410,7 @@ h2 {
   color: #a97400;
 }
 
+.cloud-view,
 .settings-view {
   gap: 16px;
 }
@@ -418,8 +421,10 @@ h2 {
 
 .cloud-form {
   gap: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+}
+
+.cloud-auth-panel {
+  gap: 12px;
 }
 
 .cloud-actions {
@@ -456,7 +461,7 @@ h2 {
   right: max(18px, calc((100vw - 440px) / 2 + 18px));
   bottom: calc(env(safe-area-inset-bottom) + 18px);
   display: grid;
-  grid-template-columns: repeat(3, 48px);
+  grid-template-columns: repeat(4, 48px);
   gap: 8px;
   padding: 8px;
   border: 1px solid rgba(103, 168, 255, 0.18);

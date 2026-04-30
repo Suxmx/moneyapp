@@ -51,10 +51,12 @@ let longPressTriggered = false;
 let toastTimer = null;
 let cloudModulePromise = null;
 let cloudBusy = false;
+let currentCloudUser = null;
 
 const summaryPanel = document.querySelector("#summaryPanel");
 const fundList = document.querySelector("#fundList");
 const detailsView = document.querySelector("#detailsView");
+const cloudView = document.querySelector("#cloudView");
 const settingsView = document.querySelector("#settingsView");
 const todaySpentAmount = document.querySelector("#todaySpentAmount");
 const monthlySpentAmount = document.querySelector("#monthlySpentAmount");
@@ -93,6 +95,8 @@ const cloudPush = document.querySelector("#cloudPush");
 const cloudPull = document.querySelector("#cloudPull");
 const cloudSignOut = document.querySelector("#cloudSignOut");
 const cloudStatus = document.querySelector("#cloudStatus");
+const cloudAuthPanel = document.querySelector("#cloudAuthPanel");
+const cloudSyncPanel = document.querySelector("#cloudSyncPanel");
 const toast = document.querySelector("#toast");
 
 document.querySelector("#addFund").addEventListener("click", addSettingRow);
@@ -398,6 +402,8 @@ function handleTabClick(event) {
   activeView = button.dataset.view;
   if (activeView === "settings") {
     populateSettingsView();
+  }
+  if (activeView === "cloud") {
     refreshCloudSession({ silent: true });
   }
   updateViewVisibility();
@@ -406,8 +412,9 @@ function handleTabClick(event) {
 function updateViewVisibility() {
   fundList.hidden = activeView !== "budget";
   detailsView.hidden = activeView !== "details";
+  cloudView.hidden = activeView !== "cloud";
   settingsView.hidden = activeView !== "settings";
-  summaryPanel.hidden = activeView === "settings";
+  summaryPanel.hidden = activeView !== "budget";
   document.querySelectorAll(".tab-button[data-view]").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === activeView);
   });
@@ -843,7 +850,7 @@ async function handleCloudAuth(event) {
   await runCloudAction(async (cloud) => {
     const result = await cloud.signUpOrIn(email, password);
     if (result.needsConfirmation) {
-      cloudStatus.textContent = "待确认";
+      renderCloudStatus(null, "待确认");
       showToast("请先确认邮箱");
       return;
     }
@@ -965,18 +972,31 @@ function setCloudBusy(isBusy) {
   });
 }
 
-function renderCloudStatus(user = null, override = "") {
+function renderCloudStatus(user, override = "") {
   if (override) {
+    currentCloudUser = null;
     cloudStatus.textContent = override;
+    setCloudSignedIn(false);
     return;
   }
 
-  if (user?.email) {
+  if (user !== undefined) {
+    currentCloudUser = user || null;
+  }
+
+  if (currentCloudUser?.email) {
     cloudStatus.textContent = cloudMeta.lastSyncedAt ? `已同步 ${formatCloudTime(cloudMeta.lastSyncedAt)}` : "已登录";
+    setCloudSignedIn(true);
     return;
   }
 
-  cloudStatus.textContent = cloudMeta.userId ? "已登录" : "未登录";
+  cloudStatus.textContent = "未登录";
+  setCloudSignedIn(false);
+}
+
+function setCloudSignedIn(isSignedIn) {
+  cloudAuthPanel.hidden = isSignedIn;
+  cloudSyncPanel.hidden = !isSignedIn;
 }
 
 function toFriendlyError(error) {

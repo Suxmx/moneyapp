@@ -7,3 +7,4 @@
 2026-04-30: `git push` 会读取全局 Git 代理；本机代理端口改为 `127.0.0.1:10086` 后需同步更新 `http.proxy` 和 `https.proxy`，否则会继续连旧端口导致推送失败。
 2026-04-30: Supabase 客户端如果被 `app.js` 静态导入，CDN 或网络异常会拖垮整个离线 PWA；云同步应放到动态 import，在用户操作同步时再加载。
 2026-04-30: GitHub secret scanning 可能会提示 Supabase anon/public key；该 key 可用于浏览器但必须配合 RLS，不能提交 service role key，若误报可在确认 RLS 后关闭告警或改用 publishable key。
+2026-04-30: 用 Edge CDP 做本地烟测时，`Page.loadEventFired` 是事件不是命令；脚本应订阅事件或导航后短暂等待，否则会报 `'Page.loadEventFired' wasn't found`。
