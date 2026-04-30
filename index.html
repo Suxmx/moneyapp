@@ -27,8 +27,12 @@
       <section class="summary-panel" aria-label="总览">
         <div class="summary-metrics">
           <div class="summary-metric">
-            <span>日均已用</span>
-            <strong id="dailyAverageSpent">¥0</strong>
+            <span>当日已用</span>
+            <strong id="todaySpentAmount">¥0</strong>
+          </div>
+          <div class="summary-metric">
+            <span>当月已用</span>
+            <strong id="monthlySpentAmount">¥0</strong>
           </div>
           <div class="summary-metric">
             <span class="summary-label-stack">
@@ -46,15 +50,16 @@
       </section>
 
       <section class="fund-list" id="fundList" aria-label="资金用途列表"></section>
+      <section class="details-list" id="detailsView" aria-label="支出明细" hidden></section>
 
-      <nav class="bottom-tabs" aria-label="页面导航">
-        <button class="tab-button active" type="button" aria-label="预算余额">
+      <nav class="bottom-tabs" id="bottomTabs" aria-label="页面导航">
+        <button class="tab-button active" type="button" data-view="budget" aria-label="预算余额">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z" />
             <path d="M15 12.25h5V16h-5.25a1.88 1.88 0 0 1 0-3.75H15Z" />
           </svg>
         </button>
-        <button class="tab-button" type="button" aria-label="记录">
+        <button class="tab-button" type="button" data-view="details" aria-label="支出明细">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M7 4h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2-2-1.34V6a2 2 0 0 1 2-2Z" />
             <path d="M9 9h6M9 13h6" />
@@ -81,14 +86,13 @@
             </svg>
           </button>
         </div>
-        <p class="dialog-hint" id="expenseHint">输入金额后会从该模块余额扣除。</p>
         <label class="input-group">
           <span>金额</span>
           <input id="expenseAmount" inputmode="decimal" min="0" step="0.01" type="number" placeholder="0.00" required />
         </label>
         <div class="preset-grid" id="presetGrid" aria-label="常用金额"></div>
+        <div class="expense-category-grid" id="expenseCategoryGrid" aria-label="支出类别"></div>
         <menu class="dialog-actions">
-          <button class="secondary-button" value="cancel" type="submit" formnovalidate>取消</button>
           <button class="primary-button" id="saveExpense" value="default" type="submit">记账</button>
         </menu>
       </form>

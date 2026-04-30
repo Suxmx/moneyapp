@@ -2,6 +2,13 @@ const STORAGE_KEY = "moneyapp.budget.v2";
 const LEGACY_STORAGE_KEY = "moneyapp.budget.v1";
 const AUTO_SURPLUS_ID = "auto-surplus";
 const presets = [20, 50, 100, 200];
+const expenseCategories = [
+  { id: "food", label: "吃饭", icon: "食" },
+  { id: "traffic", label: "交通", icon: "行" },
+  { id: "fun", label: "娱乐", icon: "乐" },
+  { id: "shopping", label: "购物", icon: "购" },
+  { id: "home", label: "日用", icon: "家" }
+];
 
 const categories = [
   {
@@ -32,23 +39,28 @@ const defaultState = {
 let state = loadState();
 let activeFundId = null;
 let activeSpentFundId = null;
+let activeExpenseCategory = "";
+let activeView = "budget";
 let longPressTimer = null;
 let longPressTriggered = false;
 let toastTimer = null;
 
 const fundList = document.querySelector("#fundList");
-const dailyAverageSpent = document.querySelector("#dailyAverageSpent");
+const detailsView = document.querySelector("#detailsView");
+const todaySpentAmount = document.querySelector("#todaySpentAmount");
+const monthlySpentAmount = document.querySelector("#monthlySpentAmount");
 const dailyAverageRemaining = document.querySelector("#dailyAverageRemaining");
 const remainingDaysLabel = document.querySelector("#remainingDaysLabel");
 const summaryFixed = document.querySelector("#summaryFixed");
 const summarySaving = document.querySelector("#summarySaving");
 const summaryDaily = document.querySelector("#summaryDaily");
+const bottomTabs = document.querySelector("#bottomTabs");
 const expenseDialog = document.querySelector("#expenseDialog");
 const expenseForm = document.querySelector("#expenseForm");
 const expenseTitle = document.querySelector("#expenseTitle");
-const expenseHint = document.querySelector("#expenseHint");
 const expenseAmount = document.querySelector("#expenseAmount");
 const presetGrid = document.querySelector("#presetGrid");
+const expenseCategoryGrid = document.querySelector("#expenseCategoryGrid");
 const spentDialog = document.querySelector("#spentDialog");
 const spentForm = document.querySelector("#spentForm");
 const spentTitle = document.querySelector("#spentTitle");
@@ -79,6 +91,7 @@ fundList.addEventListener("pointermove", clearLongPress);
 fundList.addEventListener("pointerup", clearLongPress);
 fundList.addEventListener("pointerleave", clearLongPress);
 fundList.addEventListener("pointercancel", clearLongPress);
+bottomTabs.addEventListener("click", handleTabClick);
 
 presetGrid.innerHTML = presets
   .map((amount) => `<button type="button" data-amount="${amount}">¥${amount}</button>`)
@@ -89,6 +102,11 @@ presetGrid.addEventListener("click", (event) => {
   expenseAmount.value = button.dataset.amount;
   expenseAmount.focus();
 });
+
+expenseCategoryGrid.innerHTML = expenseCategories
+  .map((category) => `<button type="button" data-expense-category="${category.id}" aria-label="${category.label}" aria-pressed="false">${category.icon}</button>`)
+  .join("");
+expenseCategoryGrid.addEventListener("click", handleExpenseCategoryClick);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -135,7 +153,23 @@ function normalizeState(input) {
   return {
     income,
     funds,
-    history: Array.isArray(input.history) ? input.history : []
+    history: Array.isArray(input.history) ? input.history.map(normalizeHistoryItem).filter(Boolean) : []
+  };
+}
+
+function normalizeHistoryItem(item = {}) {
+  const amount = Math.max(0, toMoney(item.amount));
+  if (amount <= 0) return null;
+  const createdAt = isValidDate(item.createdAt) ? item.createdAt : new Date().toISOString();
+  const category = getExpenseCategory(item.category)?.id || "";
+
+  return {
+    id: item.id || createId(),
+    fundId: String(item.fundId || ""),
+    fundName: String(item.fundName || "支出").slice(0, 12),
+    amount,
+    category,
+    createdAt
   };
 }
 
@@ -153,6 +187,10 @@ function getCategory(categoryId) {
   return categories.find((category) => category.id === categoryId) || categories[0];
 }
 
+function getExpenseCategory(categoryId) {
+  return expenseCategories.find((category) => category.id === categoryId) || null;
+}
+
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -165,16 +203,23 @@ function render() {
   const dailyAllocated = sum(dailyFunds, "allocated");
   const dailyRemaining = sum(dailyFunds, "remaining");
   const dailySpent = sum(dailyFunds, "spent");
-  const average = getMonthlyAverages(dailySpent, dailyRemaining);
+  const average = getMonthlyAverages(dailyRemaining);
   const summarySegments = getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated);
 
-  dailyAverageSpent.textContent = formatMoney(average.spent);
+  todaySpentAmount.textContent = formatMoney(getTodaySpent());
+  monthlySpentAmount.textContent = formatMoney(dailySpent);
   dailyAverageRemaining.textContent = formatMoney(average.remaining);
   remainingDaysLabel.textContent = `剩余${average.remainingDays} d`;
   summaryFixed.style.width = `${summarySegments.fixed}%`;
   summarySaving.style.width = `${summarySegments.saving}%`;
   summaryDaily.style.width = `${summarySegments.daily}%`;
 
+  renderBudgetView(viewFunds);
+  renderDetailsView();
+  updateViewVisibility();
+}
+
+function renderBudgetView(viewFunds) {
   if (!viewFunds.length) {
     fundList.innerHTML = "";
     return;
@@ -186,6 +231,10 @@ function render() {
       return funds.length ? renderFundGroup(category, funds) : "";
     })
     .join("");
+}
+
+function renderDetailsView() {
+  detailsView.innerHTML = state.history.map(renderHistoryItem).join("");
 }
 
 function renderFundGroup(category, funds) {
@@ -227,6 +276,39 @@ function renderFundCard(fund) {
       ${progressMarkup}
     </button>
   `;
+}
+
+function renderHistoryItem(item) {
+  const category = getExpenseCategory(item.category);
+  const categoryMarkup = category ? `<span class="history-icon" aria-label="${category.label}">${category.icon}</span>` : "";
+
+  return `
+    <article class="history-item">
+      <div class="history-main">
+        ${categoryMarkup}
+        <div>
+          <strong>${escapeHtml(item.fundName)}</strong>
+          <time datetime="${escapeHtml(item.createdAt)}">${formatHistoryTime(item.createdAt)}</time>
+        </div>
+      </div>
+      <span class="history-amount">-${formatMoney(item.amount)}</span>
+    </article>
+  `;
+}
+
+function handleTabClick(event) {
+  const button = event.target.closest(".tab-button[data-view]");
+  if (!button) return;
+  activeView = button.dataset.view;
+  updateViewVisibility();
+}
+
+function updateViewVisibility() {
+  fundList.hidden = activeView !== "budget";
+  detailsView.hidden = activeView !== "details";
+  document.querySelectorAll(".tab-button[data-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === activeView);
+  });
 }
 
 function handleFundClick(event) {
@@ -281,13 +363,29 @@ function openExpense(fundId) {
   const fund = state.funds.find((item) => item.id === fundId);
   if (!fund || fund.category !== "daily") return;
 
-  const viewFund = toViewFund(fund);
   activeFundId = fundId;
+  activeExpenseCategory = "";
   expenseTitle.textContent = fund.name;
-  expenseHint.textContent = `当前剩余 ${formatMoney(viewFund.remaining)}，输入金额后会立即扣减。`;
   expenseAmount.value = "";
+  renderExpenseCategorySelection();
   expenseDialog.showModal();
   requestAnimationFrame(() => expenseAmount.focus());
+}
+
+function handleExpenseCategoryClick(event) {
+  const button = event.target.closest("button[data-expense-category]");
+  if (!button) return;
+  const nextCategory = button.dataset.expenseCategory;
+  activeExpenseCategory = activeExpenseCategory === nextCategory ? "" : nextCategory;
+  renderExpenseCategorySelection();
+}
+
+function renderExpenseCategorySelection() {
+  expenseCategoryGrid.querySelectorAll("button[data-expense-category]").forEach((button) => {
+    const selected = button.dataset.expenseCategory === activeExpenseCategory;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
 }
 
 function openSpentAdjustment(fundId) {
@@ -330,6 +428,7 @@ function saveExpense(event) {
     fundId: fund.id,
     fundName: fund.name,
     amount,
+    category: activeExpenseCategory,
     createdAt: new Date().toISOString()
   });
   state.history = state.history.slice(0, 80);
@@ -570,17 +669,23 @@ function updateSettingSummary() {
   amountSummary.textContent = `预算 ${formatMoney(totalAmount)}`;
 }
 
-function getMonthlyAverages(spent, remaining) {
+function getMonthlyAverages(remaining) {
   const now = new Date();
-  const elapsedDays = Math.max(1, now.getDate());
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const remainingDays = Math.max(1, daysInMonth - now.getDate() + 1);
 
   return {
-    spent: roundMoney(spent / elapsedDays),
     remaining: roundMoney(remaining / remainingDays),
     remainingDays
   };
+}
+
+function getTodaySpent() {
+  const today = new Date();
+  return roundMoney(state.history.reduce((total, item) => {
+    const date = new Date(item.createdAt);
+    return isSameLocalDate(date, today) ? total + toMoney(item.amount) : total;
+  }, 0));
 }
 
 function getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated) {
@@ -655,9 +760,30 @@ function formatPercent(value) {
   return `${rounded}%`;
 }
 
+function formatHistoryTime(value) {
+  const date = new Date(value);
+  if (!isValidDate(value)) return "";
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${month}/${day} ${hours}:${minutes}`;
+}
+
 function formatInputNumber(value) {
   const number = roundMoney(value);
   return Number.isInteger(number) ? String(number) : String(number);
+}
+
+function isValidDate(value) {
+  return !Number.isNaN(new Date(value).getTime());
+}
+
+function isSameLocalDate(left, right) {
+  return isValidDate(left) &&
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate();
 }
 
 function createId() {
