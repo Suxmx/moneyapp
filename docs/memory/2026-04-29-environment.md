@@ -11,3 +11,4 @@
 2026-04-30: Edge CDP 的 `Runtime.evaluate` 内如果执行 `location.reload()`，当前 promise 会因执行上下文销毁而失败；烟测应先写 localStorage，再用 `Page.navigate` 单独重载后继续验证。
 2026-04-30: PointerEvent 自动化长按不会自动合成后续 click，可能让 `longPressTriggered` 残留并吞掉下一次点击；长按弹窗关闭时应清理该标记，烟测可显式点击验证。
 2026-04-30: Edge CDP 的 `/json/new?...` 在本机需要用 `PUT` 请求，`GET` 会返回 405；本地烟测脚本创建新页时应显式设置 `{ method: "PUT" }`。
+2026-04-30: iOS 主屏幕 PWA 可能长期保留旧 Service Worker 控制的缓存；静态壳应使用 network-first、`updateViaCache: "none"` 和 `controllerchange` 自动刷新，安装预缓存也要用 `cache: "reload"`。

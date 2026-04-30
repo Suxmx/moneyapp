@@ -173,10 +173,15 @@ historyCategoryGrid.innerHTML = expenseCategoryGrid.innerHTML;
 historyCategoryGrid.addEventListener("click", handleHistoryCategoryClick);
 
 if ("serviceWorker" in navigator) {
+  let serviceWorkerRefreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (serviceWorkerRefreshing) return;
+    serviceWorkerRefreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
-      showToast("离线缓存暂时不可用");
-    });
+    registerServiceWorker();
   });
 }
 
@@ -1301,6 +1306,27 @@ function renderCloudStatus(user, override = "") {
 function setCloudSignedIn(isSignedIn) {
   cloudAuthPanel.hidden = isSignedIn;
   cloudSyncPanel.hidden = !isSignedIn;
+}
+
+async function registerServiceWorker() {
+  try {
+    const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      if (!worker) return;
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) {
+          worker.postMessage({ type: "SKIP_WAITING" });
+        }
+      });
+    });
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    }
+    registration.update().catch(() => {});
+  } catch {
+    showToast("离线缓存暂时不可用");
+  }
 }
 
 function toFriendlyError(error) {
