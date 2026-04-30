@@ -96,6 +96,7 @@ const spentTitle = document.querySelector("#spentTitle");
 const spentHint = document.querySelector("#spentHint");
 const spentAmountLabel = document.querySelector("#spentAmountLabel");
 const spentAmount = document.querySelector("#spentAmount");
+const spentSwitch = document.querySelector("#spentSwitch");
 const settingsForm = document.querySelector("#settingsForm");
 const incomeInput = document.querySelector("#incomeInput");
 const budgetEditor = document.querySelector("#budgetEditor");
@@ -499,7 +500,10 @@ function renderHistoryGroup(group, period = "full") {
             <strong>${escapeHtml(group.name)}</strong>
           </div>
         </div>
-        <span class="history-amount">${formatHistoryAmount(group.total)}</span>
+        <div class="history-group-side">
+          <span class="history-amount">${formatHistoryAmount(group.total)}</span>
+          <span class="history-group-chevron" aria-hidden="true"></span>
+        </div>
       </article>
       ${childMarkup}
     </section>
@@ -726,8 +730,8 @@ function openSpentAdjustment(fundId) {
   spentHint.textContent = `当前已用 ${formatMoney(viewFund.spent)}，总额 ${formatMoney(viewFund.allocated)}。`;
   spentAmountLabel.textContent = "已用金额";
   spentAmount.value = formatInputNumber(viewFund.spent);
-  spentDialog.showModal();
-  requestAnimationFrame(() => spentAmount.select());
+  updateSpentSwitch(fund);
+  showSpentDialog();
 }
 
 function openDailyLimitAdjustment(fundId) {
@@ -741,8 +745,25 @@ function openDailyLimitAdjustment(fundId) {
   spentHint.textContent = `今日已用 ${formatMoney(getTodaySpentByFund(fund.id))}。`;
   spentAmountLabel.textContent = "每日限额";
   spentAmount.value = formatInputNumber(fund.dailyLimit || 0);
-  spentDialog.showModal();
+  updateSpentSwitch(fund);
+  showSpentDialog();
+}
+
+function showSpentDialog() {
+  if (!spentDialog.open) {
+    spentDialog.showModal();
+  }
   requestAnimationFrame(() => spentAmount.select());
+}
+
+function updateSpentSwitch(fund) {
+  const canSwitch = Boolean(fund?.dailyLimitEnabled && fund.dailyLimit > 0);
+  spentSwitch.hidden = !canSwitch;
+  if (!canSwitch) return;
+
+  const switchToSpent = activeSpentMode === "limit";
+  spentSwitch.value = switchToSpent ? "switch-spent" : "switch-limit";
+  spentSwitch.textContent = switchToSpent ? "已用金额" : "每日限额";
 }
 
 function saveExpense(event) {
@@ -860,6 +881,14 @@ function deleteHistoryItem(historyId) {
 function saveSpentAmount(event) {
   event.preventDefault();
   const submitter = event.submitter;
+  if (submitter?.value === "switch-spent") {
+    openSpentAdjustment(activeSpentFundId);
+    return;
+  }
+  if (submitter?.value === "switch-limit") {
+    openDailyLimitAdjustment(activeSpentFundId);
+    return;
+  }
   if (submitter?.value === "cancel") {
     spentDialog.close();
     return;

@@ -10,3 +10,4 @@
 2026-04-30: 用 Edge CDP 做本地烟测时，`Page.loadEventFired` 是事件不是命令；脚本应订阅事件或导航后短暂等待，否则会报 `'Page.loadEventFired' wasn't found`。
 2026-04-30: Edge CDP 的 `Runtime.evaluate` 内如果执行 `location.reload()`，当前 promise 会因执行上下文销毁而失败；烟测应先写 localStorage，再用 `Page.navigate` 单独重载后继续验证。
 2026-04-30: PointerEvent 自动化长按不会自动合成后续 click，可能让 `longPressTriggered` 残留并吞掉下一次点击；长按弹窗关闭时应清理该标记，烟测可显式点击验证。
+2026-04-30: Edge CDP 的 `/json/new?...` 在本机需要用 `PUT` 请求，`GET` 会返回 405；本地烟测脚本创建新页时应显式设置 `{ method: "PUT" }`。

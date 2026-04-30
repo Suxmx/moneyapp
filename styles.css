@@ -341,6 +341,7 @@ h2 {
 
 .fund-day-track {
   height: 6px;
+  width: 34%;
   margin: -6px 0 15px;
 }
 
@@ -468,6 +469,26 @@ h2 {
 
 .history-group-card:active {
   transform: scale(0.99);
+}
+
+.history-group-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.history-group-chevron {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid #8aa0b4;
+  border-bottom: 2px solid #8aa0b4;
+  transform: rotate(-45deg);
+  transition: transform 160ms ease;
+}
+
+.history-group-card.expanded .history-group-chevron {
+  transform: rotate(45deg);
 }
 
 .history-group-dot {
