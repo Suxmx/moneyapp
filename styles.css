@@ -27,6 +27,7 @@
 html {
   min-height: 100%;
   background: var(--bg);
+  touch-action: manipulation;
 }
 
 body {
@@ -36,6 +37,7 @@ body {
     radial-gradient(circle at top left, rgba(139, 220, 154, 0.26), transparent 34rem),
     linear-gradient(180deg, #fbfeff 0%, #f5fbff 46%, #eef8ff 100%);
   color: var(--ink);
+  touch-action: manipulation;
 }
 
 button,
@@ -353,6 +355,84 @@ h2 {
   -webkit-touch-callout: none;
 }
 
+.details-toolbar {
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 8px);
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 6px;
+}
+
+.period-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  padding: 5px;
+  border: 1px solid rgba(103, 168, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 24px rgba(67, 133, 180, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.period-tabs button {
+  min-height: 36px;
+  border-radius: 13px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 820;
+}
+
+.period-tabs button.active {
+  background: var(--blue-strong);
+  color: #ffffff;
+}
+
+.details-body,
+.history-group,
+.history-sublist {
+  display: grid;
+  gap: 10px;
+}
+
+.history-group-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 76px;
+  padding: 15px;
+  border: 1px solid rgba(103, 168, 255, 0.16);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ffffff, #f3fbff);
+  box-shadow: 0 12px 28px rgba(67, 133, 180, 0.09);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.history-group-card:active {
+  transform: scale(0.99);
+}
+
+.history-group-dot {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--fund-color);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--fund-color) 18%, transparent);
+}
+
+.history-sublist {
+  padding-left: 12px;
+}
+
 .history-item-adjustment {
   border-color: rgba(255, 211, 106, 0.46);
   background: #fffdf4;
@@ -417,6 +497,23 @@ h2 {
 
 .settings-form {
   gap: 16px;
+}
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 52px;
+  padding: 0 2px;
+  color: var(--ink);
+  font-weight: 820;
+}
+
+.setting-toggle input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--blue-strong);
 }
 
 .cloud-form {

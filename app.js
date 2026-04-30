@@ -10,6 +10,11 @@ const expenseCategories = [
   { id: "shopping", label: "购物", icon: "购" },
   { id: "home", label: "日用", icon: "家" }
 ];
+const detailPeriods = [
+  { id: "day", label: "日" },
+  { id: "week", label: "周" },
+  { id: "month", label: "月" }
+];
 
 const categories = [
   {
@@ -34,7 +39,11 @@ const colors = ["#48c7b5", "#67a8ff", "#8bdc9a", "#78c6ff", "#60d394", "#91b7ff"
 const defaultState = {
   income: 0,
   funds: [],
-  history: []
+  history: [],
+  settings: {
+    detailPeriod: "day",
+    groupDetailsByFund: false
+  }
 };
 
 let state = loadState();
@@ -48,10 +57,12 @@ let activeView = "budget";
 let longPressTimer = null;
 let historyLongPressTimer = null;
 let longPressTriggered = false;
+let historyLongPressTriggered = false;
 let toastTimer = null;
 let cloudModulePromise = null;
 let cloudBusy = false;
 let currentCloudUser = null;
+const expandedDetailGroups = new Set();
 
 const summaryPanel = document.querySelector("#summaryPanel");
 const fundList = document.querySelector("#fundList");
@@ -87,6 +98,7 @@ const incomeInput = document.querySelector("#incomeInput");
 const budgetEditor = document.querySelector("#budgetEditor");
 const percentSummary = document.querySelector("#percentSummary");
 const amountSummary = document.querySelector("#amountSummary");
+const detailsGroupToggle = document.querySelector("#detailsGroupToggle");
 const cloudForm = document.querySelector("#cloudForm");
 const cloudEmail = document.querySelector("#cloudEmail");
 const cloudPassword = document.querySelector("#cloudPassword");
@@ -109,6 +121,7 @@ cloudForm.addEventListener("submit", handleCloudAuth);
 cloudPush.addEventListener("click", handleCloudPush);
 cloudPull.addEventListener("click", handleCloudPull);
 cloudSignOut.addEventListener("click", handleCloudSignOut);
+detailsGroupToggle.addEventListener("change", handleDetailsGroupToggleChange);
 incomeInput.addEventListener("input", syncBudgetRowsForIncome);
 budgetEditor.addEventListener("input", handleBudgetEditorInput);
 budgetEditor.addEventListener("change", handleBudgetEditorInput);
@@ -120,6 +133,7 @@ fundList.addEventListener("pointermove", clearLongPress);
 fundList.addEventListener("pointerup", clearLongPress);
 fundList.addEventListener("pointerleave", clearLongPress);
 fundList.addEventListener("pointercancel", clearLongPress);
+detailsView.addEventListener("click", handleDetailsClick);
 detailsView.addEventListener("contextmenu", handleHistoryContextMenu);
 detailsView.addEventListener("pointerdown", startHistoryLongPress);
 detailsView.addEventListener("pointermove", clearHistoryLongPress);
@@ -127,6 +141,10 @@ detailsView.addEventListener("pointerup", clearHistoryLongPress);
 detailsView.addEventListener("pointerleave", clearHistoryLongPress);
 detailsView.addEventListener("pointercancel", clearHistoryLongPress);
 bottomTabs.addEventListener("click", handleTabClick);
+document.addEventListener("gesturestart", preventGestureZoom, { passive: false });
+document.addEventListener("gesturechange", preventGestureZoom, { passive: false });
+document.addEventListener("gestureend", preventGestureZoom, { passive: false });
+document.addEventListener("touchmove", preventMultiTouchZoom, { passive: false });
 
 presetGrid.innerHTML = presets
   .map((amount) => `<button type="button" data-amount="${amount}">¥${amount}</button>`)
@@ -183,7 +201,7 @@ function loadCloudMeta() {
   }
 }
 
-function normalizeState(input) {
+function normalizeState(input = {}) {
   const income = Math.max(0, toMoney(input.income));
   const funds = Array.isArray(input.funds) && input.funds.length
     ? input.funds.map((fund, index) => {
@@ -208,7 +226,15 @@ function normalizeState(input) {
   return {
     income,
     funds,
-    history: Array.isArray(input.history) ? input.history.map(normalizeHistoryItem).filter(Boolean) : []
+    history: Array.isArray(input.history) ? input.history.map(normalizeHistoryItem).filter(Boolean) : [],
+    settings: normalizeSettings(input.settings)
+  };
+}
+
+function normalizeSettings(settings = {}) {
+  return {
+    detailPeriod: normalizeDetailPeriod(settings.detailPeriod),
+    groupDetailsByFund: Boolean(settings.groupDetailsByFund)
   };
 }
 
@@ -333,7 +359,26 @@ function renderBudgetView(viewFunds) {
 }
 
 function renderDetailsView() {
-  detailsView.innerHTML = state.history.map(renderHistoryItem).join("");
+  const period = state.settings.detailPeriod;
+  const items = getFilteredHistoryItems(period);
+  const bodyMarkup = state.settings.groupDetailsByFund
+    ? renderGroupedHistoryItems(items)
+    : renderHistoryList(items);
+
+  detailsView.innerHTML = `
+    <div class="details-toolbar" aria-label="明细周期">
+      <div class="period-tabs" role="group" aria-label="明细周期">
+        ${detailPeriods.map((item) => `
+          <button class="${item.id === period ? "active" : ""}" type="button" data-detail-period="${item.id}" aria-pressed="${item.id === period}">
+            ${item.label}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+    <div class="details-body">
+      ${bodyMarkup || '<div class="empty-state compact">暂无明细</div>'}
+    </div>
+  `;
 }
 
 function renderFundGroup(category, funds) {
@@ -380,7 +425,6 @@ function renderFundCard(fund) {
 function renderHistoryItem(item) {
   const category = getExpenseCategory(item.category);
   const categoryMarkup = category ? `<span class="history-icon" aria-label="${category.label}">${category.icon}</span>` : "";
-  const amountText = item.amount < 0 ? `+${formatMoney(Math.abs(item.amount))}` : `-${formatMoney(item.amount)}`;
 
   return `
     <article class="history-item history-item-${item.kind}" data-id="${item.id}">
@@ -391,8 +435,36 @@ function renderHistoryItem(item) {
           <time datetime="${escapeHtml(item.createdAt)}">${formatHistoryTime(item.createdAt)}</time>
         </div>
       </div>
-      <span class="history-amount">${amountText}</span>
+      <span class="history-amount">${formatHistoryAmount(item.amount)}</span>
     </article>
+  `;
+}
+
+function renderHistoryList(items) {
+  return items.map(renderHistoryItem).join("");
+}
+
+function renderGroupedHistoryItems(items) {
+  return groupHistoryItems(items).map(renderHistoryGroup).join("");
+}
+
+function renderHistoryGroup(group) {
+  const expanded = expandedDetailGroups.has(group.key);
+  const childMarkup = expanded ? `<div class="history-sublist">${group.items.map(renderHistoryItem).join("")}</div>` : "";
+
+  return `
+    <section class="history-group" data-group-key="${escapeHtml(group.key)}">
+      <article class="history-group-card ${expanded ? "expanded" : ""}" role="button" tabindex="0" aria-expanded="${expanded}">
+        <div class="history-main">
+          <span class="history-group-dot" style="--fund-color: ${group.color}"></span>
+          <div>
+            <strong>${escapeHtml(group.name)}</strong>
+          </div>
+        </div>
+        <span class="history-amount">${formatHistoryAmount(group.total)}</span>
+      </article>
+      ${childMarkup}
+    </section>
   `;
 }
 
@@ -418,6 +490,38 @@ function updateViewVisibility() {
   document.querySelectorAll(".tab-button[data-view]").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === activeView);
   });
+}
+
+function handleDetailsClick(event) {
+  if (historyLongPressTriggered) {
+    historyLongPressTriggered = false;
+    return;
+  }
+
+  const periodButton = event.target.closest("button[data-detail-period]");
+  if (periodButton) {
+    const nextPeriod = normalizeDetailPeriod(periodButton.dataset.detailPeriod);
+    if (nextPeriod !== state.settings.detailPeriod) {
+      state.settings = { ...state.settings, detailPeriod: nextPeriod };
+      expandedDetailGroups.clear();
+      saveState();
+      render();
+    }
+    return;
+  }
+
+  if (event.target.closest(".history-item")) return;
+
+  const group = event.target.closest(".history-group");
+  if (!group) return;
+  const key = group.dataset.groupKey;
+  if (!key) return;
+  if (expandedDetailGroups.has(key)) {
+    expandedDetailGroups.delete(key);
+  } else {
+    expandedDetailGroups.add(key);
+  }
+  renderDetailsView();
 }
 
 function handleFundClick(event) {
@@ -480,7 +584,9 @@ function startHistoryLongPress(event) {
   if (!item) return;
 
   clearHistoryLongPress();
+  historyLongPressTriggered = false;
   historyLongPressTimer = window.setTimeout(() => {
+    historyLongPressTriggered = true;
     openHistoryEdit(item.id);
   }, 620);
 }
@@ -612,6 +718,10 @@ function saveHistoryEdit(event) {
     historyDialog.close();
     return;
   }
+  if (submitter?.value === "delete") {
+    deleteHistoryItem(activeHistoryId);
+    return;
+  }
 
   const item = state.history.find((historyItem) => historyItem.id === activeHistoryId);
   const fund = item ? state.funds.find((fundItem) => fundItem.id === item.fundId) : null;
@@ -647,6 +757,28 @@ function saveHistoryEdit(event) {
   historyDialog.close();
   render();
   showToast("明细已更新");
+}
+
+function deleteHistoryItem(historyId) {
+  const index = state.history.findIndex((historyItem) => historyItem.id === historyId);
+  if (index < 0) {
+    showToast("明细不存在");
+    return;
+  }
+  const item = state.history[index];
+  const confirmed = window.confirm("删除这条明细吗？");
+  if (!confirmed) return;
+
+  const fund = state.funds.find((fundItem) => fundItem.id === item.fundId);
+  if (fund?.category === "daily") {
+    fund.spent = Math.max(0, roundMoney(toMoney(fund.spent) - item.amount));
+  }
+  state.history.splice(index, 1);
+  activeHistoryId = null;
+  saveState();
+  historyDialog.close();
+  render();
+  showToast("明细已删除");
 }
 
 function saveSpentAmount(event) {
@@ -692,8 +824,19 @@ function saveSpentAmount(event) {
 
 function populateSettingsView() {
   incomeInput.value = state.income;
+  detailsGroupToggle.checked = state.settings.groupDetailsByFund;
   budgetEditor.innerHTML = state.funds.filter((fund) => fund.id !== AUTO_SURPLUS_ID).map(renderSettingRow).join("");
   syncBudgetRowsForIncome();
+}
+
+function handleDetailsGroupToggleChange() {
+  state.settings = {
+    ...state.settings,
+    groupDetailsByFund: detailsGroupToggle.checked
+  };
+  expandedDetailGroups.clear();
+  saveState();
+  render();
 }
 
 function resetToInitialState() {
@@ -831,7 +974,15 @@ function saveSettings(event) {
     nextFunds.push(createSurplusFund(remainder));
   }
 
-  state = { ...state, income, funds: nextFunds };
+  state = {
+    ...state,
+    income,
+    funds: nextFunds,
+    settings: {
+      ...state.settings,
+      groupDetailsByFund: detailsGroupToggle.checked
+    }
+  };
   saveState();
   render();
   populateSettingsView();
@@ -1075,6 +1226,61 @@ function getTodaySpent() {
   return Math.max(0, roundMoney(spent));
 }
 
+function getFilteredHistoryItems(period) {
+  const bounds = getDetailPeriodBounds(period);
+  return state.history.filter((item) => {
+    const date = new Date(item.createdAt);
+    return isValidDate(date) && date >= bounds.start && date < bounds.end;
+  });
+}
+
+function getDetailPeriodBounds(period) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const normalized = normalizeDetailPeriod(period);
+
+  if (normalized === "week") {
+    const day = start.getDay() || 7;
+    start.setDate(start.getDate() - day + 1);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 7);
+    return { start, end };
+  }
+
+  if (normalized === "month") {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { start: monthStart, end };
+  }
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 1);
+  return { start, end };
+}
+
+function groupHistoryItems(items) {
+  const groupMap = new Map();
+  items.forEach((item) => {
+    const fund = state.funds.find((fundItem) => fundItem.id === item.fundId);
+    const key = item.fundId || item.fundName || "unknown";
+    const existing = groupMap.get(key) || {
+      key,
+      name: fund?.name || item.fundName || "支出",
+      color: fund?.color || getCategory(fund?.category || "daily").color,
+      total: 0,
+      items: []
+    };
+    existing.total = roundMoney(existing.total + item.amount);
+    existing.items.push(item);
+    groupMap.set(key, existing);
+  });
+  return [...groupMap.values()];
+}
+
+function normalizeDetailPeriod(period) {
+  return detailPeriods.some((item) => item.id === period) ? period : "day";
+}
+
 function getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated) {
   const income = Math.max(0, state.income);
   if (income <= 0) return { fixed: 0, saving: 0, daily: 0 };
@@ -1147,6 +1353,10 @@ function formatPercent(value) {
   return `${rounded}%`;
 }
 
+function formatHistoryAmount(value) {
+  return value < 0 ? `+${formatMoney(Math.abs(value))}` : `-${formatMoney(value)}`;
+}
+
 function formatHistoryTime(value) {
   const date = new Date(value);
   if (!isValidDate(value)) return "";
@@ -1179,6 +1389,16 @@ function isSameLocalDate(left, right) {
     left.getFullYear() === right.getFullYear() &&
     left.getMonth() === right.getMonth() &&
     left.getDate() === right.getDate();
+}
+
+function preventGestureZoom(event) {
+  event.preventDefault();
+}
+
+function preventMultiTouchZoom(event) {
+  if (event.touches?.length > 1) {
+    event.preventDefault();
+  }
 }
 
 function createId() {

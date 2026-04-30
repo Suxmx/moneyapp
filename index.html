@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#f5fbff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -80,6 +80,10 @@
             <span id="percentSummary">已分配 0%</span>
             <span id="amountSummary">预算 ¥0</span>
           </div>
+          <label class="setting-toggle">
+            <span>明细聚合</span>
+            <input id="detailsGroupToggle" type="checkbox" />
+          </label>
           <div class="budget-editor" id="budgetEditor"></div>
           <button class="add-button" id="addFund" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -166,6 +170,7 @@
         </label>
         <div class="expense-category-grid" id="historyCategoryGrid" aria-label="支出类别"></div>
         <menu class="dialog-actions">
+          <button class="danger-button" id="deleteHistory" value="delete" type="submit" formnovalidate>删除</button>
           <button class="primary-button" id="saveHistory" value="default" type="submit">保存</button>
         </menu>
       </form>
