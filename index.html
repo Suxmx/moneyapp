@@ -68,6 +68,26 @@
             <button class="primary-button" id="saveSettings" value="default" type="submit">保存</button>
           </menu>
         </form>
+        <form class="cloud-form" id="cloudForm">
+          <div class="page-heading">
+            <p class="eyebrow">云端同步</p>
+            <h2 id="cloudStatus">未登录</h2>
+          </div>
+          <label class="input-group">
+            <span>邮箱</span>
+            <input id="cloudEmail" autocomplete="email" inputmode="email" type="email" />
+          </label>
+          <label class="input-group">
+            <span>密码</span>
+            <input id="cloudPassword" autocomplete="current-password" type="password" />
+          </label>
+          <div class="cloud-actions">
+            <button class="primary-button" id="cloudAuth" type="submit">注册/登录</button>
+            <button class="secondary-button" id="cloudPush" type="button">同步到云端</button>
+            <button class="secondary-button" id="cloudPull" type="button">从云端恢复</button>
+            <button class="danger-button" id="cloudSignOut" type="button">退出登录</button>
+          </div>
+        </form>
       </section>
 
       <nav class="bottom-tabs" id="bottomTabs" aria-label="页面导航">

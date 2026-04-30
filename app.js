@@ -1,5 +1,6 @@
 const STORAGE_KEY = "moneyapp.budget.v2";
 const LEGACY_STORAGE_KEY = "moneyapp.budget.v1";
+const CLOUD_META_KEY = "moneyapp.cloud.meta";
 const AUTO_SURPLUS_ID = "auto-surplus";
 const presets = [20, 50, 100, 200];
 const expenseCategories = [
@@ -37,6 +38,7 @@ const defaultState = {
 };
 
 let state = loadState();
+let cloudMeta = loadCloudMeta();
 let activeFundId = null;
 let activeSpentFundId = null;
 let activeHistoryId = null;
@@ -47,6 +49,8 @@ let longPressTimer = null;
 let historyLongPressTimer = null;
 let longPressTriggered = false;
 let toastTimer = null;
+let cloudModulePromise = null;
+let cloudBusy = false;
 
 const summaryPanel = document.querySelector("#summaryPanel");
 const fundList = document.querySelector("#fundList");
@@ -81,6 +85,14 @@ const incomeInput = document.querySelector("#incomeInput");
 const budgetEditor = document.querySelector("#budgetEditor");
 const percentSummary = document.querySelector("#percentSummary");
 const amountSummary = document.querySelector("#amountSummary");
+const cloudForm = document.querySelector("#cloudForm");
+const cloudEmail = document.querySelector("#cloudEmail");
+const cloudPassword = document.querySelector("#cloudPassword");
+const cloudAuth = document.querySelector("#cloudAuth");
+const cloudPush = document.querySelector("#cloudPush");
+const cloudPull = document.querySelector("#cloudPull");
+const cloudSignOut = document.querySelector("#cloudSignOut");
+const cloudStatus = document.querySelector("#cloudStatus");
 const toast = document.querySelector("#toast");
 
 document.querySelector("#addFund").addEventListener("click", addSettingRow);
@@ -89,6 +101,10 @@ expenseForm.addEventListener("submit", saveExpense);
 historyForm.addEventListener("submit", saveHistoryEdit);
 spentForm.addEventListener("submit", saveSpentAmount);
 settingsForm.addEventListener("submit", saveSettings);
+cloudForm.addEventListener("submit", handleCloudAuth);
+cloudPush.addEventListener("click", handleCloudPush);
+cloudPull.addEventListener("click", handleCloudPull);
+cloudSignOut.addEventListener("click", handleCloudSignOut);
 incomeInput.addEventListener("input", syncBudgetRowsForIncome);
 budgetEditor.addEventListener("input", handleBudgetEditorInput);
 budgetEditor.addEventListener("change", handleBudgetEditorInput);
@@ -133,6 +149,7 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+renderCloudStatus();
 render();
 
 function loadState() {
@@ -142,6 +159,23 @@ function loadState() {
     return normalizeState(JSON.parse(raw));
   } catch {
     return structuredClone(defaultState);
+  }
+}
+
+function loadCloudMeta() {
+  const defaultMeta = {
+    clientUpdatedAt: null,
+    lastSyncedAt: null,
+    userId: null
+  };
+
+  try {
+    const raw = localStorage.getItem(CLOUD_META_KEY);
+    if (!raw) return defaultMeta;
+    const meta = JSON.parse(raw);
+    return { ...defaultMeta, ...meta };
+  } catch {
+    return defaultMeta;
   }
 }
 
@@ -211,8 +245,49 @@ function getExpenseCategory(categoryId) {
   return expenseCategories.find((category) => category.id === categoryId) || null;
 }
 
-function saveState() {
+function saveState(options = {}) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (options.markChanged !== false) {
+    markLocalChanged();
+  }
+}
+
+function getStateSnapshot() {
+  return structuredClone(state);
+}
+
+function replaceStateFromCloud(payload, record = {}) {
+  state = normalizeState(payload || defaultState);
+  const syncedAt = new Date().toISOString();
+  cloudMeta = {
+    ...cloudMeta,
+    clientUpdatedAt: record.client_updated_at || record.updated_at || syncedAt,
+    lastSyncedAt: syncedAt
+  };
+  saveState({ markChanged: false });
+  saveCloudMeta();
+  render();
+  populateSettingsView();
+}
+
+function markLocalChanged() {
+  cloudMeta = {
+    ...cloudMeta,
+    clientUpdatedAt: new Date().toISOString()
+  };
+  saveCloudMeta();
+  renderCloudStatus();
+}
+
+function saveCloudMeta() {
+  localStorage.setItem(CLOUD_META_KEY, JSON.stringify(cloudMeta));
+}
+
+function getClientUpdatedAt() {
+  if (!cloudMeta.clientUpdatedAt) {
+    markLocalChanged();
+  }
+  return cloudMeta.clientUpdatedAt;
 }
 
 function render() {
@@ -323,6 +398,7 @@ function handleTabClick(event) {
   activeView = button.dataset.view;
   if (activeView === "settings") {
     populateSettingsView();
+    refreshCloudSession({ silent: true });
   }
   updateViewVisibility();
 }
@@ -620,6 +696,7 @@ function resetToInitialState() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
   state = structuredClone(defaultState);
+  markLocalChanged();
   populateSettingsView();
   render();
   showToast("已恢复初始状态");
@@ -752,6 +829,160 @@ function saveSettings(event) {
   render();
   populateSettingsView();
   showToast("预算已更新");
+}
+
+async function handleCloudAuth(event) {
+  event.preventDefault();
+  const email = cloudEmail.value.trim();
+  const password = cloudPassword.value;
+  if (!email || !password) {
+    showToast("请输入邮箱和密码");
+    return;
+  }
+
+  await runCloudAction(async (cloud) => {
+    const result = await cloud.signUpOrIn(email, password);
+    if (result.needsConfirmation) {
+      cloudStatus.textContent = "待确认";
+      showToast("请先确认邮箱");
+      return;
+    }
+
+    const user = await cloud.getSessionUser();
+    cloudMeta = { ...cloudMeta, userId: user?.id || result.user?.id || null };
+    saveCloudMeta();
+    renderCloudStatus(user);
+    cloudPassword.value = "";
+    showToast("已登录");
+  });
+}
+
+async function handleCloudPush() {
+  await runCloudAction(async (cloud) => {
+    const user = await ensureCloudUser(cloud);
+    const clientUpdatedAt = getClientUpdatedAt();
+    await cloud.pushState(getStateSnapshot(), clientUpdatedAt);
+    cloudMeta = {
+      ...cloudMeta,
+      userId: user.id,
+      lastSyncedAt: new Date().toISOString()
+    };
+    saveCloudMeta();
+    renderCloudStatus(user);
+    showToast("已同步到云端");
+  });
+}
+
+async function handleCloudPull() {
+  const confirmed = window.confirm("从云端恢复会覆盖本地数据。确定继续吗？");
+  if (!confirmed) return;
+
+  await runCloudAction(async (cloud) => {
+    const user = await ensureCloudUser(cloud);
+    const record = await cloud.pullState();
+    if (!record?.payload) {
+      cloudMeta = { ...cloudMeta, userId: user.id };
+      saveCloudMeta();
+      renderCloudStatus(user);
+      showToast("云端暂无数据");
+      return;
+    }
+
+    cloudMeta = { ...cloudMeta, userId: user.id };
+    replaceStateFromCloud(record.payload, record);
+    renderCloudStatus(user);
+    showToast("已从云端恢复");
+  });
+}
+
+async function handleCloudSignOut() {
+  await runCloudAction(async (cloud) => {
+    await cloud.signOut();
+    cloudMeta = { ...cloudMeta, userId: null };
+    saveCloudMeta();
+    renderCloudStatus(null);
+    showToast("已退出登录");
+  });
+}
+
+async function refreshCloudSession(options = {}) {
+  try {
+    const cloud = await getCloudModule();
+    if (!cloud.isCloudConfigured()) {
+      renderCloudStatus(null, "未配置");
+      return null;
+    }
+
+    const user = await cloud.getSessionUser();
+    cloudMeta = { ...cloudMeta, userId: user?.id || null };
+    saveCloudMeta();
+    renderCloudStatus(user);
+    return user;
+  } catch (error) {
+    renderCloudStatus(null, "不可用");
+    if (!options.silent) {
+      showToast(toFriendlyError(error));
+    }
+    return null;
+  }
+}
+
+async function runCloudAction(action) {
+  setCloudBusy(true);
+  try {
+    const cloud = await getCloudModule();
+    if (!cloud.isCloudConfigured()) {
+      throw new Error("请先配置 Supabase");
+    }
+    await action(cloud);
+  } catch (error) {
+    showToast(toFriendlyError(error));
+  } finally {
+    setCloudBusy(false);
+  }
+}
+
+async function ensureCloudUser(cloud) {
+  const user = await cloud.getSessionUser();
+  if (!user) throw new Error("请先登录");
+  return user;
+}
+
+function getCloudModule() {
+  if (!cloudModulePromise) {
+    cloudModulePromise = import("./supabase-sync.js").catch((error) => {
+      cloudModulePromise = null;
+      throw error;
+    });
+  }
+  return cloudModulePromise;
+}
+
+function setCloudBusy(isBusy) {
+  cloudBusy = isBusy;
+  [cloudAuth, cloudPush, cloudPull, cloudSignOut].forEach((button) => {
+    button.disabled = cloudBusy;
+  });
+}
+
+function renderCloudStatus(user = null, override = "") {
+  if (override) {
+    cloudStatus.textContent = override;
+    return;
+  }
+
+  if (user?.email) {
+    cloudStatus.textContent = cloudMeta.lastSyncedAt ? `已同步 ${formatCloudTime(cloudMeta.lastSyncedAt)}` : "已登录";
+    return;
+  }
+
+  cloudStatus.textContent = cloudMeta.userId ? "已登录" : "未登录";
+}
+
+function toFriendlyError(error) {
+  const message = error?.message || "云端同步失败";
+  if (message.includes("Failed to fetch") || message.includes("Importing")) return "同步模块暂不可用";
+  return message;
 }
 
 function createSurplusFund(amount) {
@@ -904,6 +1135,14 @@ function formatHistoryTime(value) {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${month}/${day} ${hours}:${minutes}`;
+}
+
+function formatCloudTime(value) {
+  const date = new Date(value);
+  if (!isValidDate(value)) return "";
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
 }
 
 function formatInputNumber(value) {

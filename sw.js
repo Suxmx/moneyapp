@@ -1,9 +1,11 @@
-const CACHE_NAME = "moneyapp-shell-v10";
+const CACHE_NAME = "moneyapp-shell-v11";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./supabase-config.js",
+  "./supabase-sync.js",
   "./manifest.webmanifest",
   "./icons/app-icon.svg"
 ];

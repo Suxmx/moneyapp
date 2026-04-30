@@ -230,7 +230,8 @@ h2 {
 .fund-group-list,
 .details-list,
 .settings-view,
-.settings-form {
+.settings-form,
+.cloud-form {
   display: grid;
   gap: 12px;
 }
@@ -413,6 +414,22 @@ h2 {
 
 .settings-form {
   gap: 16px;
+}
+
+.cloud-form {
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.cloud-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cloud-actions button {
+  min-width: 0;
 }
 
 .page-heading {
