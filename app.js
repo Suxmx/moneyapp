@@ -39,14 +39,19 @@ const defaultState = {
 let state = loadState();
 let activeFundId = null;
 let activeSpentFundId = null;
+let activeHistoryId = null;
 let activeExpenseCategory = "";
+let activeHistoryCategory = "";
 let activeView = "budget";
 let longPressTimer = null;
+let historyLongPressTimer = null;
 let longPressTriggered = false;
 let toastTimer = null;
 
+const summaryPanel = document.querySelector("#summaryPanel");
 const fundList = document.querySelector("#fundList");
 const detailsView = document.querySelector("#detailsView");
+const settingsView = document.querySelector("#settingsView");
 const todaySpentAmount = document.querySelector("#todaySpentAmount");
 const monthlySpentAmount = document.querySelector("#monthlySpentAmount");
 const dailyAverageRemaining = document.querySelector("#dailyAverageRemaining");
@@ -61,12 +66,16 @@ const expenseTitle = document.querySelector("#expenseTitle");
 const expenseAmount = document.querySelector("#expenseAmount");
 const presetGrid = document.querySelector("#presetGrid");
 const expenseCategoryGrid = document.querySelector("#expenseCategoryGrid");
+const historyDialog = document.querySelector("#historyDialog");
+const historyForm = document.querySelector("#historyForm");
+const historyTitle = document.querySelector("#historyTitle");
+const historyAmount = document.querySelector("#historyAmount");
+const historyCategoryGrid = document.querySelector("#historyCategoryGrid");
 const spentDialog = document.querySelector("#spentDialog");
 const spentForm = document.querySelector("#spentForm");
 const spentTitle = document.querySelector("#spentTitle");
 const spentHint = document.querySelector("#spentHint");
 const spentAmount = document.querySelector("#spentAmount");
-const settingsDialog = document.querySelector("#settingsDialog");
 const settingsForm = document.querySelector("#settingsForm");
 const incomeInput = document.querySelector("#incomeInput");
 const budgetEditor = document.querySelector("#budgetEditor");
@@ -74,10 +83,10 @@ const percentSummary = document.querySelector("#percentSummary");
 const amountSummary = document.querySelector("#amountSummary");
 const toast = document.querySelector("#toast");
 
-document.querySelector("#openSettings").addEventListener("click", openSettings);
 document.querySelector("#addFund").addEventListener("click", addSettingRow);
 document.querySelector("#resetState").addEventListener("click", resetToInitialState);
 expenseForm.addEventListener("submit", saveExpense);
+historyForm.addEventListener("submit", saveHistoryEdit);
 spentForm.addEventListener("submit", saveSpentAmount);
 settingsForm.addEventListener("submit", saveSettings);
 incomeInput.addEventListener("input", syncBudgetRowsForIncome);
@@ -91,6 +100,12 @@ fundList.addEventListener("pointermove", clearLongPress);
 fundList.addEventListener("pointerup", clearLongPress);
 fundList.addEventListener("pointerleave", clearLongPress);
 fundList.addEventListener("pointercancel", clearLongPress);
+detailsView.addEventListener("contextmenu", handleHistoryContextMenu);
+detailsView.addEventListener("pointerdown", startHistoryLongPress);
+detailsView.addEventListener("pointermove", clearHistoryLongPress);
+detailsView.addEventListener("pointerup", clearHistoryLongPress);
+detailsView.addEventListener("pointerleave", clearHistoryLongPress);
+detailsView.addEventListener("pointercancel", clearHistoryLongPress);
 bottomTabs.addEventListener("click", handleTabClick);
 
 presetGrid.innerHTML = presets
@@ -107,6 +122,8 @@ expenseCategoryGrid.innerHTML = expenseCategories
   .map((category) => `<button type="button" data-expense-category="${category.id}" aria-label="${category.label}" aria-pressed="false">${category.icon}</button>`)
   .join("");
 expenseCategoryGrid.addEventListener("click", handleExpenseCategoryClick);
+historyCategoryGrid.innerHTML = expenseCategoryGrid.innerHTML;
+historyCategoryGrid.addEventListener("click", handleHistoryCategoryClick);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -158,8 +175,10 @@ function normalizeState(input) {
 }
 
 function normalizeHistoryItem(item = {}) {
-  const amount = Math.max(0, toMoney(item.amount));
-  if (amount <= 0) return null;
+  const kind = item.kind === "adjustment" ? "adjustment" : "expense";
+  const amount = kind === "adjustment" ? toMoney(item.amount) : Math.max(0, toMoney(item.amount));
+  if (kind === "expense" && amount <= 0) return null;
+  if (kind === "adjustment" && amount === 0) return null;
   const createdAt = isValidDate(item.createdAt) ? item.createdAt : new Date().toISOString();
   const category = getExpenseCategory(item.category)?.id || "";
 
@@ -169,6 +188,7 @@ function normalizeHistoryItem(item = {}) {
     fundName: String(item.fundName || "支出").slice(0, 12),
     amount,
     category,
+    kind,
     createdAt
   };
 }
@@ -281,9 +301,10 @@ function renderFundCard(fund) {
 function renderHistoryItem(item) {
   const category = getExpenseCategory(item.category);
   const categoryMarkup = category ? `<span class="history-icon" aria-label="${category.label}">${category.icon}</span>` : "";
+  const amountText = item.amount < 0 ? `+${formatMoney(Math.abs(item.amount))}` : `-${formatMoney(item.amount)}`;
 
   return `
-    <article class="history-item">
+    <article class="history-item history-item-${item.kind}" data-id="${item.id}">
       <div class="history-main">
         ${categoryMarkup}
         <div>
@@ -291,7 +312,7 @@ function renderHistoryItem(item) {
           <time datetime="${escapeHtml(item.createdAt)}">${formatHistoryTime(item.createdAt)}</time>
         </div>
       </div>
-      <span class="history-amount">-${formatMoney(item.amount)}</span>
+      <span class="history-amount">${amountText}</span>
     </article>
   `;
 }
@@ -300,12 +321,17 @@ function handleTabClick(event) {
   const button = event.target.closest(".tab-button[data-view]");
   if (!button) return;
   activeView = button.dataset.view;
+  if (activeView === "settings") {
+    populateSettingsView();
+  }
   updateViewVisibility();
 }
 
 function updateViewVisibility() {
   fundList.hidden = activeView !== "budget";
   detailsView.hidden = activeView !== "details";
+  settingsView.hidden = activeView !== "settings";
+  summaryPanel.hidden = activeView === "settings";
   document.querySelectorAll(".tab-button[data-view]").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === activeView);
   });
@@ -359,6 +385,34 @@ function getDailyFundFromEvent(event) {
   return fund?.category === "daily" ? fund : null;
 }
 
+function handleHistoryContextMenu(event) {
+  const item = getHistoryItemFromEvent(event);
+  if (!item) return;
+  event.preventDefault();
+}
+
+function startHistoryLongPress(event) {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  const item = getHistoryItemFromEvent(event);
+  if (!item) return;
+
+  clearHistoryLongPress();
+  historyLongPressTimer = window.setTimeout(() => {
+    openHistoryEdit(item.id);
+  }, 620);
+}
+
+function clearHistoryLongPress() {
+  clearTimeout(historyLongPressTimer);
+  historyLongPressTimer = null;
+}
+
+function getHistoryItemFromEvent(event) {
+  const card = event.target.closest(".history-item");
+  if (!card) return null;
+  return state.history.find((item) => item.id === card.dataset.id) || null;
+}
+
 function openExpense(fundId) {
   const fund = state.funds.find((item) => item.id === fundId);
   if (!fund || fund.category !== "daily") return;
@@ -383,6 +437,35 @@ function handleExpenseCategoryClick(event) {
 function renderExpenseCategorySelection() {
   expenseCategoryGrid.querySelectorAll("button[data-expense-category]").forEach((button) => {
     const selected = button.dataset.expenseCategory === activeExpenseCategory;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+}
+
+function openHistoryEdit(historyId) {
+  const item = state.history.find((historyItem) => historyItem.id === historyId);
+  if (!item) return;
+
+  activeHistoryId = historyId;
+  activeHistoryCategory = item.category || "";
+  historyTitle.textContent = item.fundName;
+  historyAmount.value = formatInputNumber(item.amount);
+  renderHistoryCategorySelection();
+  historyDialog.showModal();
+  requestAnimationFrame(() => historyAmount.select());
+}
+
+function handleHistoryCategoryClick(event) {
+  const button = event.target.closest("button[data-expense-category]");
+  if (!button) return;
+  const nextCategory = button.dataset.expenseCategory;
+  activeHistoryCategory = activeHistoryCategory === nextCategory ? "" : nextCategory;
+  renderHistoryCategorySelection();
+}
+
+function renderHistoryCategorySelection() {
+  historyCategoryGrid.querySelectorAll("button[data-expense-category]").forEach((button) => {
+    const selected = button.dataset.expenseCategory === activeHistoryCategory;
     button.classList.toggle("selected", selected);
     button.setAttribute("aria-pressed", String(selected));
   });
@@ -429,6 +512,7 @@ function saveExpense(event) {
     fundName: fund.name,
     amount,
     category: activeExpenseCategory,
+    kind: "expense",
     createdAt: new Date().toISOString()
   });
   state.history = state.history.slice(0, 80);
@@ -436,6 +520,50 @@ function saveExpense(event) {
   expenseDialog.close();
   render();
   showToast(`${fund.name} 已记 ${formatMoney(amount)}`);
+}
+
+function saveHistoryEdit(event) {
+  event.preventDefault();
+  const submitter = event.submitter;
+  if (submitter?.value === "cancel") {
+    historyDialog.close();
+    return;
+  }
+
+  const item = state.history.find((historyItem) => historyItem.id === activeHistoryId);
+  const fund = item ? state.funds.find((fundItem) => fundItem.id === item.fundId) : null;
+  if (!item || !fund || fund.category !== "daily") {
+    showToast("明细不可修改");
+    return;
+  }
+
+  const nextAmount = item.kind === "adjustment"
+    ? toMoney(historyAmount.value)
+    : Math.max(0, toMoney(historyAmount.value));
+  if ((item.kind === "expense" && nextAmount <= 0) || (item.kind === "adjustment" && nextAmount === 0)) {
+    showToast("请输入有效金额");
+    return;
+  }
+
+  const allocated = getFundAllocation(fund, state.income);
+  const nextSpent = roundMoney(toMoney(fund.spent) - item.amount + nextAmount);
+  if (nextSpent < 0) {
+    showToast("已用金额不能小于 0");
+    return;
+  }
+  if (nextSpent > allocated) {
+    showToast("金额超过该用途总额");
+    return;
+  }
+
+  fund.spent = nextSpent;
+  item.amount = nextAmount;
+  item.category = activeHistoryCategory;
+  item.fundName = fund.name;
+  saveState();
+  historyDialog.close();
+  render();
+  showToast("明细已更新");
 }
 
 function saveSpentAmount(event) {
@@ -459,18 +587,30 @@ function saveSpentAmount(event) {
     return;
   }
 
+  const delta = roundMoney(amount - viewFund.spent);
   fund.spent = roundMoney(amount);
+  if (delta !== 0) {
+    state.history.unshift({
+      id: createId(),
+      fundId: fund.id,
+      fundName: fund.name,
+      amount: delta,
+      category: "",
+      kind: "adjustment",
+      createdAt: new Date().toISOString()
+    });
+    state.history = state.history.slice(0, 80);
+  }
   saveState();
   spentDialog.close();
   render();
   showToast(`${fund.name} 已用更新为 ${formatMoney(amount)}`);
 }
 
-function openSettings() {
+function populateSettingsView() {
   incomeInput.value = state.income;
   budgetEditor.innerHTML = state.funds.filter((fund) => fund.id !== AUTO_SURPLUS_ID).map(renderSettingRow).join("");
   syncBudgetRowsForIncome();
-  settingsDialog.showModal();
 }
 
 function resetToInitialState() {
@@ -480,7 +620,7 @@ function resetToInitialState() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
   state = structuredClone(defaultState);
-  settingsDialog.close();
+  populateSettingsView();
   render();
   showToast("已恢复初始状态");
 }
@@ -570,11 +710,6 @@ function addSettingRow() {
 
 function saveSettings(event) {
   event.preventDefault();
-  const submitter = event.submitter;
-  if (submitter?.value === "cancel") {
-    settingsDialog.close();
-    return;
-  }
 
   const income = toMoney(incomeInput.value);
   const rows = [...budgetEditor.querySelectorAll(".budget-row")];
@@ -614,8 +749,8 @@ function saveSettings(event) {
 
   state = { ...state, income, funds: nextFunds };
   saveState();
-  settingsDialog.close();
   render();
+  populateSettingsView();
   showToast("预算已更新");
 }
 
@@ -682,10 +817,11 @@ function getMonthlyAverages(remaining) {
 
 function getTodaySpent() {
   const today = new Date();
-  return roundMoney(state.history.reduce((total, item) => {
+  const spent = state.history.reduce((total, item) => {
     const date = new Date(item.createdAt);
     return isSameLocalDate(date, today) ? total + toMoney(item.amount) : total;
-  }, 0));
+  }, 0);
+  return Math.max(0, roundMoney(spent));
 }
 
 function getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated) {

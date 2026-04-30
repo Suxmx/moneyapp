@@ -15,16 +15,7 @@
   </head>
   <body>
     <main class="app-shell" aria-label="月度口袋记账">
-      <header class="top-bar">
-        <button class="icon-button" id="openSettings" type="button" aria-label="设置预算">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
-            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.05.05a2.05 2.05 0 0 1-2.9 2.9l-.05-.05A1.7 1.7 0 0 0 15 19.43a1.7 1.7 0 0 0-1 .57 1.7 1.7 0 0 0-.34 1.08V21a2.05 2.05 0 1 1-4.1 0v-.08A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.05.05a2.05 2.05 0 1 1-2.9-2.9l.05-.05A1.7 1.7 0 0 0 4.57 15a1.7 1.7 0 0 0-1.56-1H3a2.05 2.05 0 1 1 0-4.1h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.05-.05a2.05 2.05 0 1 1 2.9-2.9l.05.05A1.7 1.7 0 0 0 9 4.57a1.7 1.7 0 0 0 1-.57 1.7 1.7 0 0 0 .34-1.08V3a2.05 2.05 0 1 1 4.1 0v.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.05-.05a2.05 2.05 0 1 1 2.9 2.9l-.05.05A1.7 1.7 0 0 0 19.43 9c.1.37.3.7.57 1 .31.31.72.48 1.16.48H21a2.05 2.05 0 1 1 0 4.1h-.08A1.7 1.7 0 0 0 19.4 15Z" />
-          </svg>
-        </button>
-      </header>
-
-      <section class="summary-panel" aria-label="总览">
+      <section class="summary-panel" id="summaryPanel" aria-label="总览">
         <div class="summary-metrics">
           <div class="summary-metric">
             <span>当日已用</span>
@@ -51,6 +42,33 @@
 
       <section class="fund-list" id="fundList" aria-label="资金用途列表"></section>
       <section class="details-list" id="detailsView" aria-label="支出明细" hidden></section>
+      <section class="settings-view" id="settingsView" aria-label="预算设置" hidden>
+        <form class="settings-form" id="settingsForm">
+          <div class="page-heading">
+            <p class="eyebrow">预算设置</p>
+            <h2>分配本月收入</h2>
+          </div>
+          <label class="input-group">
+            <span>当月总收入</span>
+            <input id="incomeInput" inputmode="decimal" min="0" step="any" type="number" required />
+          </label>
+          <div class="setting-summary">
+            <span id="percentSummary">已分配 0%</span>
+            <span id="amountSummary">预算 ¥0</span>
+          </div>
+          <div class="budget-editor" id="budgetEditor"></div>
+          <button class="add-button" id="addFund" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            添加用途
+          </button>
+          <button class="danger-button" id="resetState" type="button">恢复初始状态</button>
+          <menu class="dialog-actions settings-actions">
+            <button class="primary-button" id="saveSettings" value="default" type="submit">保存</button>
+          </menu>
+        </form>
+      </section>
 
       <nav class="bottom-tabs" id="bottomTabs" aria-label="页面导航">
         <button class="tab-button active" type="button" data-view="budget" aria-label="预算余额">
@@ -65,9 +83,10 @@
             <path d="M9 9h6M9 13h6" />
           </svg>
         </button>
-        <button class="tab-button" type="button" aria-label="统计">
+        <button class="tab-button" type="button" data-view="settings" aria-label="设置">
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5 20V10M12 20V4M19 20v-7" />
+            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.05.05a2.05 2.05 0 0 1-2.9 2.9l-.05-.05A1.7 1.7 0 0 0 15 19.43a1.7 1.7 0 0 0-1 .57 1.7 1.7 0 0 0-.34 1.08V21a2.05 2.05 0 1 1-4.1 0v-.08A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.05.05a2.05 2.05 0 1 1-2.9-2.9l.05-.05A1.7 1.7 0 0 0 4.57 15a1.7 1.7 0 0 0-1.56-1H3a2.05 2.05 0 1 1 0-4.1h.08A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.05-.05a2.05 2.05 0 1 1 2.9-2.9l.05.05A1.7 1.7 0 0 0 9 4.57a1.7 1.7 0 0 0 1-.57 1.7 1.7 0 0 0 .34-1.08V3a2.05 2.05 0 1 1 4.1 0v.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.05-.05a2.05 2.05 0 1 1 2.9 2.9l-.05.05A1.7 1.7 0 0 0 19.43 9c.1.37.3.7.57 1 .31.31.72.48 1.16.48H21a2.05 2.05 0 1 1 0 4.1h-.08A1.7 1.7 0 0 0 19.4 15Z" />
           </svg>
         </button>
       </nav>
@@ -98,6 +117,30 @@
       </form>
     </dialog>
 
+    <dialog class="sheet" id="historyDialog" aria-labelledby="historyTitle">
+      <form method="dialog" id="historyForm">
+        <div class="sheet-header">
+          <div>
+            <p class="eyebrow">修改明细</p>
+            <h2 id="historyTitle">支出明细</h2>
+          </div>
+          <button class="icon-button subtle" value="cancel" type="submit" formnovalidate aria-label="关闭">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <label class="input-group">
+          <span>金额</span>
+          <input id="historyAmount" inputmode="decimal" step="any" type="number" placeholder="0.00" required />
+        </label>
+        <div class="expense-category-grid" id="historyCategoryGrid" aria-label="支出类别"></div>
+        <menu class="dialog-actions">
+          <button class="primary-button" id="saveHistory" value="default" type="submit">保存</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog class="sheet" id="spentDialog" aria-labelledby="spentTitle">
       <form method="dialog" id="spentForm">
         <div class="sheet-header">
@@ -119,42 +162,6 @@
         <menu class="dialog-actions">
           <button class="secondary-button" value="cancel" type="submit" formnovalidate>取消</button>
           <button class="primary-button" id="saveSpent" value="default" type="submit">保存</button>
-        </menu>
-      </form>
-    </dialog>
-
-    <dialog class="sheet settings-sheet" id="settingsDialog" aria-labelledby="settingsTitle">
-      <form method="dialog" id="settingsForm">
-        <div class="sheet-header">
-          <div>
-            <p class="eyebrow">预算设置</p>
-            <h2 id="settingsTitle">分配本月收入</h2>
-          </div>
-          <button class="icon-button subtle" value="cancel" type="submit" formnovalidate aria-label="关闭">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m6 6 12 12M18 6 6 18" />
-            </svg>
-          </button>
-        </div>
-        <label class="input-group">
-          <span>当月总收入</span>
-          <input id="incomeInput" inputmode="decimal" min="0" step="any" type="number" required />
-        </label>
-        <div class="setting-summary">
-          <span id="percentSummary">已分配 0%</span>
-          <span id="amountSummary">预算 ¥0</span>
-        </div>
-        <div class="budget-editor" id="budgetEditor"></div>
-        <button class="add-button" id="addFund" type="button">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          添加用途
-        </button>
-        <button class="danger-button" id="resetState" type="button">恢复初始状态</button>
-        <menu class="dialog-actions">
-          <button class="secondary-button" value="cancel" type="submit" formnovalidate>取消</button>
-          <button class="primary-button" id="saveSettings" value="default" type="submit">保存</button>
         </menu>
       </form>
     </dialog>
