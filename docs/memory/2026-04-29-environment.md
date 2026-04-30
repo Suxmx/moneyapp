@@ -6,3 +6,4 @@
 2026-04-29: 本机 GitHub CLI 有账号记录但 keyring token 失效，`gh auth status` 提示重新 `gh auth login -h github.com`；需要 GitHub Pages 部署前先由用户完成登录。
 2026-04-30: `git push` 会读取全局 Git 代理；本机代理端口改为 `127.0.0.1:10086` 后需同步更新 `http.proxy` 和 `https.proxy`，否则会继续连旧端口导致推送失败。
 2026-04-30: Supabase 客户端如果被 `app.js` 静态导入，CDN 或网络异常会拖垮整个离线 PWA；云同步应放到动态 import，在用户操作同步时再加载。
+2026-04-30: GitHub secret scanning 可能会提示 Supabase anon/public key；该 key 可用于浏览器但必须配合 RLS，不能提交 service role key，若误报可在确认 RLS 后关闭告警或改用 publishable key。
