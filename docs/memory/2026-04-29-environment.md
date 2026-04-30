@@ -9,3 +9,4 @@
 2026-04-30: GitHub secret scanning 可能会提示 Supabase anon/public key；该 key 可用于浏览器但必须配合 RLS，不能提交 service role key，若误报可在确认 RLS 后关闭告警或改用 publishable key。
 2026-04-30: 用 Edge CDP 做本地烟测时，`Page.loadEventFired` 是事件不是命令；脚本应订阅事件或导航后短暂等待，否则会报 `'Page.loadEventFired' wasn't found`。
 2026-04-30: Edge CDP 的 `Runtime.evaluate` 内如果执行 `location.reload()`，当前 promise 会因执行上下文销毁而失败；烟测应先写 localStorage，再用 `Page.navigate` 单独重载后继续验证。
+2026-04-30: PointerEvent 自动化长按不会自动合成后续 click，可能让 `longPressTriggered` 残留并吞掉下一次点击；长按弹窗关闭时应清理该标记，烟测可显式点击验证。

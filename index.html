@@ -15,7 +15,7 @@
   </head>
   <body>
     <main class="app-shell" aria-label="月度口袋记账">
-      <section class="summary-panel" id="summaryPanel" aria-label="总览">
+      <section class="summary-panel" id="summaryPanel" aria-label="总览" role="button" tabindex="0" aria-expanded="false">
         <div class="summary-metrics">
           <div class="summary-metric">
             <span>当日已用</span>
@@ -180,7 +180,7 @@
       <form method="dialog" id="spentForm">
         <div class="sheet-header">
           <div>
-            <p class="eyebrow">调整已用</p>
+            <p class="eyebrow" id="spentModeLabel">调整已用</p>
             <h2 id="spentTitle">已用金额</h2>
           </div>
           <button class="icon-button subtle" value="cancel" type="submit" formnovalidate aria-label="关闭">
@@ -191,7 +191,7 @@
         </div>
         <p class="dialog-hint" id="spentHint">输入该用途当前已经使用的金额。</p>
         <label class="input-group">
-          <span>已用金额</span>
+          <span id="spentAmountLabel">已用金额</span>
           <input id="spentAmount" inputmode="decimal" min="0" step="0.01" type="number" placeholder="0.00" required />
         </label>
         <menu class="dialog-actions">

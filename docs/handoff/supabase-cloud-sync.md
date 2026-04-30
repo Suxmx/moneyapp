@@ -13,6 +13,6 @@
 
 ## 状态说明
 
-`localStorage` 仍是主数据源；`saveState()` 默认只更新本地并刷新 `clientUpdatedAt`，不会自动上传。点击“同步到云端”会 upsert 当前 `state`，点击“从云端恢复”会确认后用云端 `payload` 覆盖本地并经 `normalizeState()` 规范化；明细周期和是否聚合等 `settings` 也随整份 `state` 同步。
+`localStorage` 仍是主数据源；`saveState()` 默认只更新本地并刷新 `clientUpdatedAt`，不会自动上传。点击“同步到云端”会 upsert 当前 `state`，点击“从云端恢复”会确认后用云端 `payload` 覆盖本地并经 `normalizeState()` 规范化；明细周期、是否聚合以及资金用途的每日限额字段都随整份 `state` 同步。
 
 云端同步入口位于底部“云端”tab，排在设置 tab 前；未登录时只显示邮箱、密码和注册/登录，登录后隐藏输入区，只显示同步、恢复和退出登录。

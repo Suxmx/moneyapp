@@ -50,6 +50,7 @@ let state = loadState();
 let cloudMeta = loadCloudMeta();
 let activeFundId = null;
 let activeSpentFundId = null;
+let activeSpentMode = "spent";
 let activeHistoryId = null;
 let activeExpenseCategory = "";
 let activeHistoryCategory = "";
@@ -90,8 +91,10 @@ const historyAmount = document.querySelector("#historyAmount");
 const historyCategoryGrid = document.querySelector("#historyCategoryGrid");
 const spentDialog = document.querySelector("#spentDialog");
 const spentForm = document.querySelector("#spentForm");
+const spentModeLabel = document.querySelector("#spentModeLabel");
 const spentTitle = document.querySelector("#spentTitle");
 const spentHint = document.querySelector("#spentHint");
+const spentAmountLabel = document.querySelector("#spentAmountLabel");
 const spentAmount = document.querySelector("#spentAmount");
 const settingsForm = document.querySelector("#settingsForm");
 const incomeInput = document.querySelector("#incomeInput");
@@ -113,9 +116,14 @@ const toast = document.querySelector("#toast");
 
 document.querySelector("#addFund").addEventListener("click", addSettingRow);
 document.querySelector("#resetState").addEventListener("click", resetToInitialState);
+summaryPanel.addEventListener("click", toggleSummaryPanel);
+summaryPanel.addEventListener("keydown", handleSummaryKeydown);
 expenseForm.addEventListener("submit", saveExpense);
 historyForm.addEventListener("submit", saveHistoryEdit);
 spentForm.addEventListener("submit", saveSpentAmount);
+spentDialog.addEventListener("close", () => {
+  longPressTriggered = false;
+});
 settingsForm.addEventListener("submit", saveSettings);
 cloudForm.addEventListener("submit", handleCloudAuth);
 cloudPush.addEventListener("click", handleCloudPush);
@@ -209,6 +217,8 @@ function normalizeState(input = {}) {
         const mode = fund.mode === "amount" ? "amount" : "percent";
         const percent = Math.max(0, toMoney(fund.percent));
         const amount = Math.max(0, toMoney(fund.amount));
+        const dailyLimit = Math.max(0, toMoney(fund.dailyLimit));
+        const dailyLimitEnabled = category === "daily" && Boolean(fund.dailyLimitEnabled) && dailyLimit > 0;
 
         return {
           id: fund.id || createId(),
@@ -218,7 +228,9 @@ function normalizeState(input = {}) {
           percent,
           amount,
           color: fund.color || getCategory(category).color || colors[index % colors.length],
-          spent: Math.max(0, toMoney(fund.spent))
+          spent: Math.max(0, toMoney(fund.spent)),
+          dailyLimitEnabled,
+          dailyLimit
         };
       })
     : structuredClone(defaultState.funds);
@@ -360,10 +372,8 @@ function renderBudgetView(viewFunds) {
 
 function renderDetailsView() {
   const period = state.settings.detailPeriod;
-  const items = getFilteredHistoryItems(period);
-  const bodyMarkup = state.settings.groupDetailsByFund
-    ? renderGroupedHistoryItems(items)
-    : renderHistoryList(items);
+  const sections = getHistoryPeriodSections(period);
+  const bodyMarkup = sections.map((section) => renderHistoryPeriodSection(section, period)).join("");
 
   detailsView.innerHTML = `
     <div class="details-toolbar" aria-label="明细周期">
@@ -378,6 +388,24 @@ function renderDetailsView() {
     <div class="details-body">
       ${bodyMarkup || '<div class="empty-state compact">暂无明细</div>'}
     </div>
+  `;
+}
+
+function renderHistoryPeriodSection(section, period) {
+  const itemsMarkup = state.settings.groupDetailsByFund
+    ? renderGroupedHistoryItems(section.items, section.key, period)
+    : renderHistoryList(section.items, period);
+
+  return `
+    <section class="history-period-section" data-period-key="${escapeHtml(section.key)}">
+      <div class="history-period-heading">
+        <h2>${escapeHtml(section.title)}</h2>
+        <span>${formatMoney(Math.abs(section.total))}</span>
+      </div>
+      <div class="history-period-body">
+        ${itemsMarkup}
+      </div>
+    </section>
   `;
 }
 
@@ -398,8 +426,17 @@ function renderFundCard(fund) {
   const remainingPercent = fund.allocated > 0 ? Math.max(0, Math.min(100, (fund.remaining / fund.allocated) * 100)) : 0;
   const category = getCategory(fund.category);
   const hasProgress = fund.category === "daily";
-  const displayAmount = fund.category === "fixed" ? fund.allocated : fund.remaining;
+  const displayAmount = fund.category === "fixed"
+    ? fund.allocated
+    : fund.dailyLimitEnabled
+      ? fund.dailyLimitRemaining
+      : fund.remaining;
   const progressText = `${formatPlainMoney(fund.remaining)}/${formatPlainMoney(fund.allocated)}`;
+  const dailyLimitMarkup = fund.dailyLimitEnabled ? `
+      <div class="fund-day-track" aria-hidden="true">
+        <span style="width: ${fund.dailyLimitRemainingPercent}%; background: ${category.color}"></span>
+      </div>
+  ` : "";
   const progressMarkup = hasProgress ? `
       <div class="fund-card-bottom">
         <div class="fund-progress-info">
@@ -417,12 +454,13 @@ function renderFundCard(fund) {
         <p class="fund-name"><span class="fund-dot"></span>${escapeHtml(fund.name)}</p>
       </div>
       <p class="fund-money">${formatMoney(displayAmount)}</p>
+      ${dailyLimitMarkup}
       ${progressMarkup}
     </button>
   `;
 }
 
-function renderHistoryItem(item) {
+function renderHistoryItem(item, period = "full") {
   const category = getExpenseCategory(item.category);
   const categoryMarkup = category ? `<span class="history-icon" aria-label="${category.label}">${category.icon}</span>` : "";
 
@@ -432,7 +470,7 @@ function renderHistoryItem(item) {
         ${categoryMarkup}
         <div>
           <strong>${escapeHtml(item.fundName)}</strong>
-          <time datetime="${escapeHtml(item.createdAt)}">${formatHistoryTime(item.createdAt)}</time>
+          <time datetime="${escapeHtml(item.createdAt)}">${formatHistoryTime(item.createdAt, period)}</time>
         </div>
       </div>
       <span class="history-amount">${formatHistoryAmount(item.amount)}</span>
@@ -440,17 +478,17 @@ function renderHistoryItem(item) {
   `;
 }
 
-function renderHistoryList(items) {
-  return items.map(renderHistoryItem).join("");
+function renderHistoryList(items, period = "full") {
+  return items.map((item) => renderHistoryItem(item, period)).join("");
 }
 
-function renderGroupedHistoryItems(items) {
-  return groupHistoryItems(items).map(renderHistoryGroup).join("");
+function renderGroupedHistoryItems(items, sectionKey = "", period = "full") {
+  return groupHistoryItems(items, sectionKey).map((group) => renderHistoryGroup(group, period)).join("");
 }
 
-function renderHistoryGroup(group) {
+function renderHistoryGroup(group, period = "full") {
   const expanded = expandedDetailGroups.has(group.key);
-  const childMarkup = expanded ? `<div class="history-sublist">${group.items.map(renderHistoryItem).join("")}</div>` : "";
+  const childMarkup = expanded ? `<div class="history-sublist">${group.items.map((item) => renderHistoryItem(item, period)).join("")}</div>` : "";
 
   return `
     <section class="history-group" data-group-key="${escapeHtml(group.key)}">
@@ -490,6 +528,18 @@ function updateViewVisibility() {
   document.querySelectorAll(".tab-button[data-view]").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === activeView);
   });
+}
+
+function toggleSummaryPanel() {
+  const expanded = !summaryPanel.classList.contains("expanded");
+  summaryPanel.classList.toggle("expanded", expanded);
+  summaryPanel.setAttribute("aria-expanded", String(expanded));
+}
+
+function handleSummaryKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  toggleSummaryPanel();
 }
 
 function handleDetailsClick(event) {
@@ -556,7 +606,11 @@ function startLongPress(event) {
   longPressTriggered = false;
   longPressTimer = window.setTimeout(() => {
     longPressTriggered = true;
-    openSpentAdjustment(fund.id);
+    if (fund.dailyLimitEnabled) {
+      openDailyLimitAdjustment(fund.id);
+    } else {
+      openSpentAdjustment(fund.id);
+    }
   }, 620);
 }
 
@@ -665,10 +719,28 @@ function openSpentAdjustment(fundId) {
   if (!fund || fund.category !== "daily") return;
 
   const viewFund = toViewFund(fund);
+  activeSpentMode = "spent";
   activeSpentFundId = fundId;
+  spentModeLabel.textContent = "调整已用";
   spentTitle.textContent = fund.name;
   spentHint.textContent = `当前已用 ${formatMoney(viewFund.spent)}，总额 ${formatMoney(viewFund.allocated)}。`;
+  spentAmountLabel.textContent = "已用金额";
   spentAmount.value = formatInputNumber(viewFund.spent);
+  spentDialog.showModal();
+  requestAnimationFrame(() => spentAmount.select());
+}
+
+function openDailyLimitAdjustment(fundId) {
+  const fund = state.funds.find((item) => item.id === fundId);
+  if (!fund || fund.category !== "daily") return;
+
+  activeSpentMode = "limit";
+  activeSpentFundId = fundId;
+  spentModeLabel.textContent = "调整限额";
+  spentTitle.textContent = fund.name;
+  spentHint.textContent = `今日已用 ${formatMoney(getTodaySpentByFund(fund.id))}。`;
+  spentAmountLabel.textContent = "每日限额";
+  spentAmount.value = formatInputNumber(fund.dailyLimit || 0);
   spentDialog.showModal();
   requestAnimationFrame(() => spentAmount.select());
 }
@@ -691,6 +763,10 @@ function saveExpense(event) {
   const viewFund = toViewFund(fund);
   if (amount > viewFund.remaining) {
     showToast("金额超过该用途剩余额度");
+    return;
+  }
+  if (viewFund.dailyLimitEnabled && amount > viewFund.dailyLimitRemaining) {
+    showToast("金额超过今日限额");
     return;
   }
 
@@ -791,6 +867,21 @@ function saveSpentAmount(event) {
 
   const amount = toMoney(spentAmount.value);
   const fund = state.funds.find((item) => item.id === activeSpentFundId);
+  if (activeSpentMode === "limit") {
+    if (!fund || fund.category !== "daily" || amount <= 0) {
+      showToast("请输入有效限额");
+      return;
+    }
+
+    fund.dailyLimitEnabled = true;
+    fund.dailyLimit = amount;
+    saveState();
+    spentDialog.close();
+    render();
+    showToast(`${fund.name} 日限已更新`);
+    return;
+  }
+
   if (!fund || fund.category !== "daily" || amount < 0) {
     showToast("请输入有效金额");
     return;
@@ -826,6 +917,7 @@ function populateSettingsView() {
   incomeInput.value = state.income;
   detailsGroupToggle.checked = state.settings.groupDetailsByFund;
   budgetEditor.innerHTML = state.funds.filter((fund) => fund.id !== AUTO_SURPLUS_ID).map(renderSettingRow).join("");
+  budgetEditor.querySelectorAll(".budget-row").forEach(updateBudgetRowLimitState);
   syncBudgetRowsForIncome();
 }
 
@@ -857,6 +949,8 @@ function renderSettingRow(fund) {
   const mode = fund.mode === "amount" ? "amount" : "percent";
   const percentValue = mode === "percent" ? fund.percent : viewFund.incomePercent;
   const amountValue = mode === "amount" ? fund.amount : viewFund.allocated;
+  const isDaily = fund.category === "daily";
+  const dailyLimitEnabled = isDaily && fund.dailyLimitEnabled && fund.dailyLimit > 0;
 
   return `
     <div class="budget-row" data-id="${fund.id}" data-spent="${fund.spent}" data-color="${fund.color}" data-mode="${mode}">
@@ -877,6 +971,14 @@ function renderSettingRow(fund) {
       <label class="budget-field budget-amount-field">
         <span>金额</span>
         <input class="fund-amount-input" inputmode="decimal" min="0" step="any" type="number" value="${formatInputNumber(amountValue)}" />
+      </label>
+      <label class="daily-limit-toggle">
+        <input class="fund-daily-limit-toggle" type="checkbox" ${dailyLimitEnabled ? "checked" : ""} ${isDaily ? "" : "disabled"} />
+        <span>日限</span>
+      </label>
+      <label class="budget-field budget-limit-field">
+        <span>日限额</span>
+        <input class="fund-daily-limit-input" inputmode="decimal" min="0" step="any" type="number" value="${fund.dailyLimit > 0 ? formatInputNumber(fund.dailyLimit) : ""}" ${dailyLimitEnabled ? "" : "disabled"} />
       </label>
       <button class="remove-button" type="button" aria-label="删除用途">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -904,6 +1006,11 @@ function handleBudgetEditorInput(event) {
   if (event.target.classList.contains("fund-category-input")) {
     const category = getCategory(event.target.value);
     row.dataset.color = category.color;
+    updateBudgetRowLimitState(row);
+  }
+
+  if (event.target.classList.contains("fund-daily-limit-toggle")) {
+    updateBudgetRowLimitState(row);
   }
 
   updateSettingSummary();
@@ -927,9 +1034,12 @@ function addSettingRow() {
     percent: 10,
     amount: 0,
     color: category.color,
-    spent: 0
+    spent: 0,
+    dailyLimitEnabled: false,
+    dailyLimit: 0
   };
   budgetEditor.insertAdjacentHTML("beforeend", renderSettingRow(fund));
+  updateBudgetRowLimitState(budgetEditor.lastElementChild);
   syncRowFromPercent(budgetEditor.lastElementChild);
   updateSettingSummary();
   budgetEditor.lastElementChild?.querySelector(".fund-name-input")?.select();
@@ -940,11 +1050,18 @@ function saveSettings(event) {
 
   const income = toMoney(incomeInput.value);
   const rows = [...budgetEditor.querySelectorAll(".budget-row")];
+  let hasInvalidDailyLimit = false;
   const nextFunds = rows.map((row, index) => {
     const mode = row.dataset.mode === "amount" ? "amount" : "percent";
     const category = normalizeCategory(row.querySelector(".fund-category-input").value);
     const percent = Math.max(0, toMoney(row.querySelector(".fund-percent-input").value));
     const amount = Math.max(0, toMoney(row.querySelector(".fund-amount-input").value));
+    const dailyLimitChecked = row.querySelector(".fund-daily-limit-toggle").checked;
+    const dailyLimit = Math.max(0, toMoney(row.querySelector(".fund-daily-limit-input").value));
+    const dailyLimitEnabled = category === "daily" && dailyLimitChecked;
+    if (dailyLimitEnabled && dailyLimit <= 0) {
+      hasInvalidDailyLimit = true;
+    }
 
     return {
       id: row.dataset.id || createId(),
@@ -954,9 +1071,16 @@ function saveSettings(event) {
       percent,
       amount,
       color: getCategory(category).color || row.dataset.color || colors[index % colors.length],
-      spent: category === "daily" ? Math.max(0, toMoney(row.dataset.spent)) : 0
+      spent: category === "daily" ? Math.max(0, toMoney(row.dataset.spent)) : 0,
+      dailyLimitEnabled: dailyLimitEnabled && dailyLimit > 0,
+      dailyLimit: dailyLimitEnabled ? dailyLimit : 0
     };
   }).filter((fund) => fund.id !== AUTO_SURPLUS_ID && fund.name && getFundAllocation(fund, income) > 0);
+
+  if (hasInvalidDailyLimit) {
+    showToast("请输入日限额");
+    return;
+  }
 
   if (income <= 0) {
     showToast("收入需要大于 0");
@@ -1166,12 +1290,15 @@ function createSurplusFund(amount) {
     percent: 0,
     amount,
     color: category.color,
-    spent: 0
+    spent: 0,
+    dailyLimitEnabled: false,
+    dailyLimit: 0
   };
 }
 
 function syncBudgetRowsForIncome() {
   budgetEditor.querySelectorAll(".budget-row").forEach((row) => {
+    updateBudgetRowLimitState(row);
     if (row.dataset.mode === "amount") {
       syncRowFromAmount(row);
     } else {
@@ -1179,6 +1306,21 @@ function syncBudgetRowsForIncome() {
     }
   });
   updateSettingSummary();
+}
+
+function updateBudgetRowLimitState(row) {
+  if (!row) return;
+  const categoryInput = row.querySelector(".fund-category-input");
+  const toggle = row.querySelector(".fund-daily-limit-toggle");
+  const amountInput = row.querySelector(".fund-daily-limit-input");
+  if (!categoryInput || !toggle || !amountInput) return;
+
+  const isDaily = categoryInput.value === "daily";
+  toggle.disabled = !isDaily;
+  if (!isDaily) {
+    toggle.checked = false;
+  }
+  amountInput.disabled = !isDaily || !toggle.checked;
 }
 
 function syncRowFromPercent(row) {
@@ -1226,43 +1368,74 @@ function getTodaySpent() {
   return Math.max(0, roundMoney(spent));
 }
 
-function getFilteredHistoryItems(period) {
-  const bounds = getDetailPeriodBounds(period);
-  return state.history.filter((item) => {
+function getTodaySpentByFund(fundId) {
+  const today = new Date();
+  const spent = state.history.reduce((total, item) => {
     const date = new Date(item.createdAt);
-    return isValidDate(date) && date >= bounds.start && date < bounds.end;
-  });
+    return item.fundId === fundId && isSameLocalDate(date, today) ? total + toMoney(item.amount) : total;
+  }, 0);
+  return Math.max(0, roundMoney(spent));
 }
 
-function getDetailPeriodBounds(period) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+function getHistoryPeriodSections(period) {
   const normalized = normalizeDetailPeriod(period);
+  const sectionMap = new Map();
+  const items = [...state.history].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
 
-  if (normalized === "week") {
-    const day = start.getDay() || 7;
-    start.setDate(start.getDate() - day + 1);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 7);
-    return { start, end };
-  }
+  items.forEach((item) => {
+    const meta = getHistoryPeriodMeta(item.createdAt, normalized);
+    if (!meta) return;
+    const section = sectionMap.get(meta.key) || {
+      ...meta,
+      total: 0,
+      items: []
+    };
+    section.total = roundMoney(section.total + item.amount);
+    section.items.push(item);
+    sectionMap.set(meta.key, section);
+  });
 
-  if (normalized === "month") {
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return { start: monthStart, end };
-  }
-
-  const end = new Date(start);
-  end.setDate(start.getDate() + 1);
-  return { start, end };
+  return [...sectionMap.values()];
 }
 
-function groupHistoryItems(items) {
+function getHistoryPeriodMeta(value, period) {
+  const date = new Date(value);
+  if (!isValidDate(date)) return null;
+
+  if (period === "week") {
+    const start = startOfLocalWeek(date);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return {
+      key: `week-${toDateKey(start)}`,
+      title: `第${getWeekNumber(start)}周 · ${formatShortDate(start)}-${formatShortDate(end)}`
+    };
+  }
+
+  if (period === "month") {
+    const start = new Date(date.getFullYear(), date.getMonth(), 1);
+    const now = new Date();
+    const title = date.getFullYear() === now.getFullYear()
+      ? `${date.getMonth() + 1}月`
+      : `${date.getFullYear()}年${date.getMonth() + 1}月`;
+    return {
+      key: `month-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+      title
+    };
+  }
+
+  return {
+    key: `day-${toDateKey(date)}`,
+    title: formatDayHeading(date)
+  };
+}
+
+function groupHistoryItems(items, sectionKey = "") {
   const groupMap = new Map();
   items.forEach((item) => {
     const fund = state.funds.find((fundItem) => fundItem.id === item.fundId);
-    const key = item.fundId || item.fundName || "unknown";
+    const fundKey = item.fundId || item.fundName || "unknown";
+    const key = `${sectionKey}|${fundKey}`;
     const existing = groupMap.get(key) || {
       key,
       name: fund?.name || item.fundName || "支出",
@@ -1279,6 +1452,41 @@ function groupHistoryItems(items) {
 
 function normalizeDetailPeriod(period) {
   return detailPeriods.some((item) => item.id === period) ? period : "day";
+}
+
+function startOfLocalWeek(value) {
+  const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  const day = date.getDay() || 7;
+  date.setDate(date.getDate() - day + 1);
+  return date;
+}
+
+function toDateKey(value) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getWeekNumber(value) {
+  const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  const firstDay = new Date(date.getFullYear(), 0, 1);
+  const days = Math.floor((date - firstDay) / 86400000);
+  return Math.ceil((days + firstDay.getDay() + 1) / 7);
+}
+
+function formatDayHeading(value) {
+  const now = new Date();
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  if (isSameLocalDate(value, now)) return "今天";
+  if (isSameLocalDate(value, yesterday)) return "昨天";
+  return value.getFullYear() === now.getFullYear()
+    ? `${value.getMonth() + 1}月${value.getDate()}日`
+    : `${value.getFullYear()}年${value.getMonth() + 1}月${value.getDate()}日`;
+}
+
+function formatShortDate(value) {
+  return `${value.getMonth() + 1}/${value.getDate()}`;
 }
 
 function getSummarySegments(fixedAllocated, savingAllocated, dailyAllocated) {
@@ -1311,7 +1519,24 @@ function toViewFund(fund) {
   const spent = Math.min(allocated, Math.max(0, rawSpent));
   const remaining = Math.max(0, roundMoney(allocated - spent));
   const incomePercent = state.income > 0 ? (allocated / state.income) * 100 : 0;
-  return { ...fund, allocated, spent, remaining, incomePercent };
+  const dailyLimitEnabled = fund.category === "daily" && fund.dailyLimitEnabled && fund.dailyLimit > 0;
+  const todaySpent = dailyLimitEnabled ? getTodaySpentByFund(fund.id) : 0;
+  const dailyLimitRemainingRaw = dailyLimitEnabled ? Math.max(0, roundMoney(fund.dailyLimit - todaySpent)) : 0;
+  const dailyLimitRemaining = dailyLimitEnabled ? Math.min(remaining, dailyLimitRemainingRaw) : 0;
+  const dailyLimitRemainingPercent = dailyLimitEnabled
+    ? Math.max(0, Math.min(100, (dailyLimitRemaining / fund.dailyLimit) * 100))
+    : 0;
+  return {
+    ...fund,
+    allocated,
+    spent,
+    remaining,
+    incomePercent,
+    dailyLimitEnabled,
+    todaySpent,
+    dailyLimitRemaining,
+    dailyLimitRemainingPercent
+  };
 }
 
 function getFundAllocation(fund, income) {
@@ -1357,13 +1582,14 @@ function formatHistoryAmount(value) {
   return value < 0 ? `+${formatMoney(Math.abs(value))}` : `-${formatMoney(value)}`;
 }
 
-function formatHistoryTime(value) {
+function formatHistoryTime(value, period = "full") {
   const date = new Date(value);
   if (!isValidDate(value)) return "";
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
+  if (period === "day") return `${hours}:${minutes}`;
   return `${month}/${day} ${hours}:${minutes}`;
 }
 
