@@ -4,3 +4,4 @@
 2026-04-29: Edge headless `--screenshot --window-size=390,...` 在本机截图会裁掉右侧，疑似使用了更宽的内部布局视口；移动端视觉验证可用 440 宽截图粗查，再用真实浏览器或设备确认 390 宽细节。
 2026-04-29: `dialog` 内取消按钮如果仍是 submit 且表单里有 `required` 空输入，会被浏览器原生校验拦截；取消/关闭按钮需加 `formnovalidate` 或改成显式关闭逻辑。
 2026-04-29: 本机 GitHub CLI 有账号记录但 keyring token 失效，`gh auth status` 提示重新 `gh auth login -h github.com`；需要 GitHub Pages 部署前先由用户完成登录。
+2026-04-30: `git push` 会优先读取全局 Git 代理 `127.0.0.1:33211`，该端口未运行时推送失败；可用 `git -c http.proxy= -c https.proxy= push origin main` 对单次推送临时绕过。
